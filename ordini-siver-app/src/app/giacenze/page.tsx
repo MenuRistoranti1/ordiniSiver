@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
 export default function Giacenze() {
   const { showToast } = useToast()
@@ -64,8 +65,9 @@ export default function Giacenze() {
 
     const { data: prodottiDb, error: errorProdotti } = await supabase
       .from("products")
-      .select("id, name, supplier_code")
+      .select("id, name, supplier_code, active")
       .in("id", idsProdotti)
+      .eq("active", true)
 
     if (errorProdotti) {
       console.log(errorProdotti)
@@ -74,27 +76,49 @@ export default function Giacenze() {
       return
     }
 
-    const prodottiFormattati = (impostazioni || []).map((item: any) => {
-      const idProdotto = item.prodotto_id || item.product_id
-      const prodotto = (prodottiDb || []).find(
-        (p: any) => String(p.id) === String(idProdotto)
-      )
+    const prodottiPuliti = (prodottiDb || []).filter((p: any) => {
+      const nome = String(p.name || "").toUpperCase()
+      const codice = String(p.supplier_code || "").toUpperCase()
 
-      return {
-        id: idProdotto,
-        nome_prodotto: prodotto?.name || "Prodotto",
-        supplier_code: prodotto?.supplier_code || "-",
-        min_stock: item.min_stock || 0,
-        max_stock: item.max_stock || 0,
-      }
+      return (
+        !nome.includes("DUPLICATO ARCHIVIATO") &&
+        !nome.includes("[DUPLICATO ARCHIVIATO]") &&
+        !nome.includes("[ARCHIVIATO]") &&
+        !nome.includes("ARCHIVIATO") &&
+        !nome.includes("DUPLICATO") &&
+        !codice.includes("__DUP__")
+      )
     })
+
+    const prodottiFormattati = (impostazioni || [])
+      .map((item: any) => {
+        const idProdotto = item.prodotto_id || item.product_id
+
+        const prodotto = prodottiPuliti.find(
+          (p: any) => String(p.id) === String(idProdotto)
+        )
+
+        if (!prodotto) return null
+
+        return {
+          id: idProdotto,
+          nome_prodotto: prodotto.name || "Prodotto",
+          supplier_code: prodotto.supplier_code || "-",
+          min_stock: item.min_stock || 0,
+          max_stock: item.max_stock || 0,
+        }
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) =>
+        String(a.nome_prodotto || "").localeCompare(String(b.nome_prodotto || ""))
+      )
 
     setProdotti(prodottiFormattati)
     setLoading(false)
   }
 
   function statoSoglia(prodotto: any) {
-    const valore = quantita[prodotto.nome_prodotto]
+    const valore = quantita[prodotto.id]
 
     if (valore === undefined || valore === "") return "Da compilare"
 
@@ -155,11 +179,18 @@ export default function Giacenze() {
     }
   }
 
-  function aggiornaQuantita(nome: string, valore: string) {
+  function aggiornaQuantita(idProdotto: string, valore: string) {
     setQuantita({
       ...quantita,
-      [nome]: valore,
+      [idProdotto]: valore,
     })
+  }
+
+  function cambiaQuantita(idProdotto: string, variazione: number) {
+    const attuale = Number(quantita[idProdotto] || 0)
+    const nuova = Math.max(0, attuale + variazione)
+
+    aggiornaQuantita(idProdotto, nuova === 0 ? "" : String(nuova))
   }
 
   function logout() {
@@ -180,7 +211,9 @@ export default function Giacenze() {
       )
     }
 
-    if (filtro !== "tutti") {
+    if (filtro === "compilati") {
+      lista = lista.filter((p) => Number(quantita[p.id] || 0) > 0)
+    } else if (filtro !== "tutti") {
       lista = lista.filter((p) => statoSoglia(p) === filtro)
     }
 
@@ -216,6 +249,15 @@ export default function Giacenze() {
     return lista
   }, [prodotti, ricerca, filtro, ordinamento, quantita])
 
+  const prodottiCompilati = prodotti.filter(
+    (p) => Number(quantita[p.id] || 0) > 0
+  ).length
+
+  const quantitaTotaleCompilata = prodotti.reduce(
+    (totale, p) => totale + Number(quantita[p.id] || 0),
+    0
+  )
+
   async function salvaGiacenze() {
     if (isSaving) return
 
@@ -229,6 +271,12 @@ export default function Giacenze() {
       return
     }
 
+    const conferma = window.confirm(
+      `Stai salvando la giacenza di ${prodottiCompilati} prodotti con quantità maggiore di zero. Confermi?`
+    )
+
+    if (!conferma) return
+
     setIsSaving(true)
 
     const settimanaKey = getSettimanaKey()
@@ -238,7 +286,7 @@ export default function Giacenze() {
       locale_nome: localeNome,
       responsabile: responsabile.trim(),
       nome_prodotto: p.nome_prodotto,
-      quantita: Number(quantita[p.nome_prodotto] || 0),
+      quantita: Number(quantita[p.id] || 0),
       settimana_key: settimanaKey,
     }))
 
@@ -261,7 +309,9 @@ export default function Giacenze() {
   return (
     <main className="min-h-screen bg-slate-100 px-3 pb-24 pt-4">
       <div className="mx-auto max-w-6xl space-y-4">
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
+        <LocaleMobileHeader />
+
+        <section className="hidden rounded-2xl bg-slate-950 p-4 text-white shadow-lg lg:block">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-black">OrdiniSiver</h1>
@@ -325,6 +375,7 @@ export default function Giacenze() {
             className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-bold text-slate-950 outline-none focus:border-blue-600"
           >
             <option value="tutti">Tutti i prodotti</option>
+            <option value="compilati">Solo compilati</option>
             <option value="Sotto soglia">Sotto soglia</option>
             <option value="Corretto">Corretto</option>
             <option value="Sopra soglia">Sopra soglia</option>
@@ -352,6 +403,17 @@ export default function Giacenze() {
           onChange={(e) => setResponsabile(e.target.value)}
           className="h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700"
         />
+
+        <section className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white p-3 shadow-sm">
+            <p className="text-[11px] font-black uppercase text-slate-500">Prodotti compilati</p>
+            <p className="mt-1 text-2xl font-black text-slate-950">{prodottiCompilati}</p>
+          </div>
+          <div className="rounded-2xl bg-white p-3 shadow-sm">
+            <p className="text-[11px] font-black uppercase text-slate-500">Quantità totale</p>
+            <p className="mt-1 text-2xl font-black text-slate-950">{quantitaTotaleCompilata}</p>
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:overflow-hidden md:p-0">
           {loading ? (
@@ -404,11 +466,11 @@ export default function Giacenze() {
                       <div className="px-3 py-2">
                         <input
                           type="number"
-                          value={quantita[prodotto.nome_prodotto] || ""}
+                          value={quantita[prodotto.id] || ""}
                           disabled={!!blocco || isSaving}
                           onChange={(e) =>
                             aggiornaQuantita(
-                              prodotto.nome_prodotto,
+                              prodotto.id,
                               e.target.value
                             )
                           }
@@ -454,18 +516,34 @@ export default function Giacenze() {
                           </div>
                         </div>
 
-                        <input
-                          type="number"
-                          value={quantita[prodotto.nome_prodotto] || ""}
-                          disabled={!!blocco || isSaving}
-                          onChange={(e) =>
-                            aggiornaQuantita(
-                              prodotto.nome_prodotto,
-                              e.target.value
-                            )
-                          }
-                          className="h-12 w-20 shrink-0 rounded-xl border-2 border-slate-300 bg-white text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700"
-                        />
+                        <div className="flex shrink-0 items-center gap-1 rounded-xl border-2 border-slate-200 bg-slate-50 p-1">
+                          <button
+                            type="button"
+                            onClick={() => cambiaQuantita(prodotto.id, -1)}
+                            disabled={!!blocco || isSaving}
+                            className="flex h-11 w-10 items-center justify-center rounded-lg bg-white text-xl font-black text-slate-800 shadow-sm disabled:text-slate-300"
+                            aria-label={`Diminuisci quantità ${prodotto.nome_prodotto}`}
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={quantita[prodotto.id] || ""}
+                            disabled={!!blocco || isSaving}
+                            onChange={(e) => aggiornaQuantita(prodotto.id, e.target.value)}
+                            className="h-11 w-14 bg-transparent text-center text-lg font-black text-slate-950 outline-none disabled:text-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => cambiaQuantita(prodotto.id, 1)}
+                            disabled={!!blocco || isSaving}
+                            className="flex h-11 w-10 items-center justify-center rounded-lg bg-blue-600 text-xl font-black text-white shadow-sm disabled:bg-slate-300"
+                            aria-label={`Aumenta quantità ${prodotto.nome_prodotto}`}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )
@@ -487,7 +565,7 @@ export default function Giacenze() {
             disabled={!!blocco || isSaving || loading}
             className="h-14 w-full rounded-2xl bg-blue-700 px-5 text-base font-black text-white disabled:bg-slate-400"
           >
-            {isSaving ? "Salvataggio..." : "Salva giacenze"}
+            {isSaving ? "Salvataggio..." : `Salva giacenze · ${prodottiCompilati} prodotti`}
           </button>
         </div>
       </div>

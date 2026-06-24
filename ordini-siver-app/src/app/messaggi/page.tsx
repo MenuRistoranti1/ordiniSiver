@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Menu, X } from "lucide-react"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 import { supabase } from "@/lib/supabase"
 
 export default function MessaggiLocale() {
@@ -87,7 +88,7 @@ export default function MessaggiLocale() {
     <main className="min-h-screen bg-slate-100 lg:flex">
       <button
         onClick={() => setMenuOpen(true)}
-        className="fixed left-3 top-3 z-40 rounded-xl bg-[#07132b] p-3 text-white shadow-lg lg:hidden"
+        className="hidden"
       >
         <Menu className="h-6 w-6" />
       </button>
@@ -100,9 +101,7 @@ export default function MessaggiLocale() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-[#07132b] p-6 text-white transition-transform duration-300 lg:translate-x-0 ${
-          menuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col bg-[#07132b] p-6 text-white lg:flex"
       >
         <button
           onClick={() => setMenuOpen(false)}
@@ -169,7 +168,8 @@ export default function MessaggiLocale() {
         </button>
       </aside>
 
-      <section className="w-full p-4 pt-20 lg:ml-72 lg:p-10">
+      <section className="w-full p-3 pt-4 sm:p-4 lg:ml-72 lg:p-10">
+        <LocaleMobileHeader />
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-black text-slate-950 sm:text-5xl">

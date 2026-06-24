@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/Toast";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 type RigaFattura = {
   codice: string;
@@ -762,9 +762,11 @@ export default function AdminConsegne() {
     caricaOrdini(localeId);
   }
 
-  function logout() {
-    localStorage.removeItem("admin");
-    window.location.href = "/";
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("admin")
+    localStorage.removeItem("admin_mode")
+    window.location.href = "/admin"
   }
 
   const ordiniFiltrati = useMemo(() => {

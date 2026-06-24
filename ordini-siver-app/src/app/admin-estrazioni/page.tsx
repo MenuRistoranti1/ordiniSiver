@@ -53,9 +53,11 @@ export default function AdminEstrazioni() {
     setGiacenze(giacenzeData || [])
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
-    window.location.href = "/"
+    localStorage.removeItem("admin_mode")
+    window.location.href = "/admin"
   }
 
   const risultati = useMemo(() => {
@@ -133,57 +135,8 @@ export default function AdminEstrazioni() {
   const totaleRotto = risultati.reduce((acc, r) => acc + r.totale_rotto, 0)
 
   return (
-    <main className="min-h-screen bg-[#f4f7fb] lg:flex">
-      <button
-        onClick={() => setMenuOpen(true)}
-        className="fixed left-3 top-3 z-40 rounded-xl bg-[#07132b] p-3 text-white shadow-lg lg:hidden"
-      >
-        <Menu className="h-6 w-6" />
-      </button>
-
-      {menuOpen && (
-        <div
-          onClick={() => setMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-        />
-      )}
-
-      <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-[#07132b] p-6 text-white transition-transform duration-300 lg:translate-x-0 ${
-          menuOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <button
-          onClick={() => setMenuOpen(false)}
-          className="mb-6 flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold lg:hidden"
-        >
-          <X className="h-4 w-4" />
-          Chiudi
-        </button>
-
-        <div className="mb-10">
-          <h1 className="text-3xl font-black">Ordini</h1>
-          <p className="font-semibold text-slate-300">Estrazioni prodotti</p>
-        </div>
-
-        <nav className="flex-1 space-y-3">
-          <button
-            onClick={() => (window.location.href = "/admin-dashboard")}
-            className="w-full rounded-2xl bg-blue-600 p-4 text-left font-bold"
-          >
-            Dashboard
-          </button>
-        </nav>
-
-        <button
-          onClick={logout}
-          className="rounded-2xl bg-red-500 p-4 font-bold"
-        >
-          Logout
-        </button>
-      </aside>
-
-      <section className="w-full p-4 pt-20 lg:ml-72 lg:p-10">
+    <main className="min-h-screen bg-[#f4f7fb]">
+      <section className="mx-auto w-full max-w-[1600px] p-4 lg:p-10">
         <div className="mb-8">
           <h1 className="text-3xl font-black text-slate-950 sm:text-5xl">
             Estrazioni prodotti

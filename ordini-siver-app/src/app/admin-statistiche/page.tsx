@@ -66,9 +66,11 @@ export default function AdminStatistiche() {
     setLoading(false)
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
-    window.location.href = "/"
+    localStorage.removeItem("admin_mode")
+    window.location.href = "/admin"
   }
 
   const ordiniFiltrati = useMemo(() => {

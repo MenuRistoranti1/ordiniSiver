@@ -123,16 +123,18 @@ export default function AdminMessaggi() {
     apriChat(localeSelezionato)
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
-    window.location.href = "/"
+    localStorage.removeItem("admin_mode")
+    window.location.href = "/admin"
   }
 
   return (
     <main className="min-h-screen bg-slate-100 lg:flex">
       <button
         onClick={() => setMenuOpen(true)}
-        className="fixed left-3 top-3 z-40 rounded-xl bg-[#07132b] p-3 text-white shadow-lg lg:hidden"
+        className="fixed left-3 top-20 z-30 rounded-xl bg-[#07132b] p-3 text-white shadow-lg lg:hidden"
       >
         <Menu className="h-6 w-6" />
       </button>
@@ -145,7 +147,7 @@ export default function AdminMessaggi() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-80 flex-col bg-[#07132b] p-6 text-white transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed left-0 top-16 z-30 flex h-[calc(100vh-4rem)] w-80 flex-col bg-[#07132b] p-6 text-white transition-transform duration-300 lg:translate-x-0 ${
           menuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

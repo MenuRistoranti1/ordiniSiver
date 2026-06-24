@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
 type RigaLibera = {
   nome_prodotto: string
@@ -29,6 +30,8 @@ export default function NuovoOrdine() {
   const [ricerca, setRicerca] = useState("")
   const [filtro, setFiltro] = useState("tutti")
   const [ordinamento, setOrdinamento] = useState("stato")
+  const [soloSelezionati, setSoloSelezionati] = useState(false)
+  const [riepilogoAperto, setRiepilogoAperto] = useState(false)
 
   useEffect(() => {
     const id = localStorage.getItem("locale_id") || ""
@@ -101,6 +104,7 @@ export default function NuovoOrdine() {
     }
   }
 
+
   async function caricaProdotti(id: string) {
     setLoading(true)
 
@@ -123,8 +127,9 @@ export default function NuovoOrdine() {
 
     const { data: prodottiDb, error: errorProdotti } = await supabase
       .from("products")
-      .select("id, name, supplier_code")
+      .select("id, name, supplier_code, active")
       .in("id", idsProdotti)
+      .eq("active", true)
 
     if (errorProdotti) {
       console.log("Errore prodotti:", errorProdotti)
@@ -132,6 +137,20 @@ export default function NuovoOrdine() {
       setLoading(false)
       return
     }
+
+    const prodottiPuliti = (prodottiDb || []).filter((p: any) => {
+      const nome = String(p.name || "").toUpperCase()
+      const codice = String(p.supplier_code || "").toUpperCase()
+
+      return (
+        !nome.includes("DUPLICATO ARCHIVIATO") &&
+        !nome.includes("[DUPLICATO ARCHIVIATO]") &&
+        !nome.includes("[ARCHIVIATO]") &&
+        !nome.includes("ARCHIVIATO") &&
+        !nome.includes("DUPLICATO") &&
+        !codice.includes("__DUP__")
+      )
+    })
 
     const { data: giacenzeDb, error: errorGiacenze } = await supabase
       .from("giacenze_settimana")
@@ -156,68 +175,77 @@ export default function NuovoOrdine() {
       console.log("Errore storico ordini:", errorStorico)
     }
 
-    const prodottiFormattati = (impostazioni || []).map((item: any) => {
-      const idProdotto = item.prodotto_id || item.product_id
+    const prodottiFormattati = (impostazioni || [])
+      .map((item: any) => {
+        const idProdotto = item.prodotto_id || item.product_id
 
-      const prodotto = (prodottiDb || []).find(
-        (p: any) => String(p.id) === String(idProdotto)
+        const prodotto = prodottiPuliti.find(
+          (p: any) => String(p.id) === String(idProdotto)
+        )
+
+        if (!prodotto) return null
+
+        const nomeProdotto = prodotto?.name || "Prodotto"
+
+        const giacenza = (giacenzeDb || []).find(
+          (g: any) =>
+            String(g.nome_prodotto || "").toLowerCase().trim() ===
+            String(nomeProdotto || "").toLowerCase().trim()
+        )
+
+        const qtaGiacenza = Number(giacenza?.quantita || 0)
+        const min = Number(item.min_stock || 0)
+        const max = Number(item.max_stock || 0)
+
+        const ordiniProdotto = (storicoOrdini || []).filter(
+          (o: any) =>
+            String(o.nome_prodotto || "").toLowerCase().trim() ===
+            String(nomeProdotto || "").toLowerCase().trim()
+        )
+
+        const ultime4 = ordiniProdotto.slice(0, 4)
+
+        const mediaStorica =
+          ultime4.length > 0
+            ? ultime4.reduce(
+                (sum: number, o: any) => sum + Number(o.quantita || 0),
+                0
+              ) / ultime4.length
+            : 0
+
+        const consigliatoStorico =
+          qtaGiacenza < mediaStorica
+            ? Math.ceil(mediaStorica - qtaGiacenza)
+            : 0
+
+        const consigliatoSoglia =
+          max > 0 && qtaGiacenza < min ? max - qtaGiacenza : 0
+
+        const consigliato = Math.max(consigliatoStorico, consigliatoSoglia)
+
+        return {
+          id: idProdotto,
+          nome_prodotto: nomeProdotto,
+          supplier_code: prodotto?.supplier_code || "-",
+          giacenza: qtaGiacenza,
+          min_stock: min,
+          max_stock: max,
+          media_storica: Math.ceil(mediaStorica),
+          consigliato,
+        }
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) =>
+        String(a.nome_prodotto || "").localeCompare(
+          String(b.nome_prodotto || "")
+        )
       )
-
-      const nomeProdotto = prodotto?.name || "Prodotto"
-
-      const giacenza = (giacenzeDb || []).find(
-        (g: any) =>
-          String(g.nome_prodotto || "").toLowerCase().trim() ===
-          String(nomeProdotto || "").toLowerCase().trim()
-      )
-
-      const qtaGiacenza = Number(giacenza?.quantita || 0)
-      const min = Number(item.min_stock || 0)
-      const max = Number(item.max_stock || 0)
-
-      const ordiniProdotto = (storicoOrdini || []).filter(
-        (o: any) =>
-          String(o.nome_prodotto || "").toLowerCase().trim() ===
-          String(nomeProdotto || "").toLowerCase().trim()
-      )
-
-      const ultime4 = ordiniProdotto.slice(0, 4)
-
-      const mediaStorica =
-        ultime4.length > 0
-          ? ultime4.reduce(
-              (sum: number, o: any) => sum + Number(o.quantita || 0),
-              0
-            ) / ultime4.length
-          : 0
-
-      const consigliatoStorico =
-        qtaGiacenza < mediaStorica
-          ? Math.ceil(mediaStorica - qtaGiacenza)
-          : 0
-
-      const consigliatoSoglia =
-        max > 0 && qtaGiacenza < min ? max - qtaGiacenza : 0
-
-      const consigliato = Math.max(consigliatoStorico, consigliatoSoglia)
-
-      return {
-        id: idProdotto,
-        nome_prodotto: nomeProdotto,
-        supplier_code: prodotto?.supplier_code || "-",
-        giacenza: qtaGiacenza,
-        min_stock: min,
-        max_stock: max,
-        media_storica: Math.ceil(mediaStorica),
-        consigliato,
-      }
-    })
 
     const qtaIniziali: any = {}
 
     prodottiFormattati.forEach((p: any) => {
       if (p.consigliato > 0) {
-        qtaIniziali[p.nome_prodotto] = String(p.consigliato)
+        qtaIniziali[p.id] = String(p.consigliato)
       }
     })
 
@@ -225,6 +253,7 @@ export default function NuovoOrdine() {
     setQuantita(qtaIniziali)
     setLoading(false)
   }
+
 
   function statoSoglia(prodotto: any) {
     const qta = Number(prodotto.giacenza || 0)
@@ -243,8 +272,22 @@ export default function NuovoOrdine() {
     return "bg-green-100 text-green-700"
   }
 
-  function aggiornaQuantita(nome: string, valore: string) {
-    setQuantita({ ...quantita, [nome]: valore })
+  function aggiornaQuantita(idProdotto: string, valore: string) {
+    setQuantita({ ...quantita, [idProdotto]: valore })
+  }
+
+  function cambiaQuantita(idProdotto: string, variazione: number) {
+    const attuale = Number(quantita[idProdotto] || 0)
+    const nuova = Math.max(0, attuale + variazione)
+
+    aggiornaQuantita(idProdotto, nuova === 0 ? "" : String(nuova))
+  }
+
+  function cambiaQuantitaLibera(index: number, variazione: number) {
+    const attuale = Number(righeLibere[index]?.quantita || 0)
+    const nuova = Math.max(0, attuale + variazione)
+
+    aggiornaLibera(index, "quantita", nuova === 0 ? "" : String(nuova))
   }
 
   function aggiornaLibera(index: number, campo: keyof RigaLibera, valore: string) {
@@ -269,7 +312,7 @@ export default function NuovoOrdine() {
 
     prodotti.forEach((p) => {
       if (p.consigliato > 0) {
-        nuove[p.nome_prodotto] = String(p.consigliato)
+        nuove[p.id] = String(p.consigliato)
       }
     })
 
@@ -303,6 +346,10 @@ export default function NuovoOrdine() {
       lista = lista.filter((p) => statoSoglia(p) === filtro)
     }
 
+    if (soloSelezionati) {
+      lista = lista.filter((p) => Number(quantita[p.id] || 0) > 0)
+    }
+
     if (ordinamento === "nome") {
       lista.sort((a, b) => a.nome_prodotto.localeCompare(b.nome_prodotto))
     }
@@ -330,7 +377,30 @@ export default function NuovoOrdine() {
     }
 
     return lista
-  }, [prodotti, ricerca, filtro, ordinamento])
+  }, [prodotti, ricerca, filtro, ordinamento, soloSelezionati, quantita])
+
+  const prodottiSelezionati = prodotti.filter(
+    (p) => Number(quantita[p.id] || 0) > 0
+  )
+
+  const righeLibereSelezionate = righeLibere.filter(
+    (riga) =>
+      riga.nome_prodotto.trim() &&
+      riga.misura.trim() &&
+      Number(riga.quantita || 0) > 0
+  )
+
+  const numeroRigheOrdine = prodottiSelezionati.length + righeLibereSelezionate.length
+
+  const quantitaTotaleOrdine =
+    prodottiSelezionati.reduce(
+      (totale, p) => totale + Number(quantita[p.id] || 0),
+      0
+    ) +
+    righeLibereSelezionate.reduce(
+      (totale, riga) => totale + Number(riga.quantita || 0),
+      0
+    )
 
   async function salvaOrdine() {
     if (isSaving) return
@@ -367,8 +437,8 @@ export default function NuovoOrdine() {
     const righeProdotti = prodotti
       .filter(
         (p) =>
-          quantita[p.nome_prodotto] &&
-          Number(quantita[p.nome_prodotto]) > 0
+          quantita[p.id] &&
+          Number(quantita[p.id]) > 0
       )
       .map((p) => ({
         locale_id: localeId,
@@ -377,7 +447,7 @@ export default function NuovoOrdine() {
 nome_prodotto: p.nome_prodotto,
 supplier_code: p.supplier_code || "",
 misure: "",
-quantita: Number(quantita[p.nome_prodotto]),
+quantita: Number(quantita[p.id]),
 settimana_key: settimanaKey,
       }))
 
@@ -405,6 +475,12 @@ settimana_key: settimanaKey,
       showToast("Inserisci almeno una quantità", "warning")
       return
     }
+
+    const conferma = window.confirm(
+      `Stai inviando ${righeOrdine.length} prodotti per una quantità totale di ${quantitaTotaleOrdine}. Confermi l'invio dell'ordine?`
+    )
+
+    if (!conferma) return
 
     setIsSaving(true)
 
@@ -437,7 +513,9 @@ settimana_key: settimanaKey,
   return (
     <main className="min-h-screen bg-slate-100 px-3 pb-24 pt-4 sm:px-5 sm:pb-4 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-4">
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
+        <LocaleMobileHeader />
+
+        <section className="hidden rounded-2xl bg-slate-950 p-4 text-white shadow-lg lg:block">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-bold tracking-tight sm:text-xl">
@@ -541,6 +619,72 @@ settimana_key: settimanaKey,
           >
             Svuota quantità
           </button>
+
+          <button
+            type="button"
+            onClick={() => setSoloSelezionati(!soloSelezionati)}
+            className={`h-14 rounded-2xl px-4 text-sm font-bold sm:col-span-2 ${
+              soloSelezionati ? "bg-blue-600 text-white" : "border-2 border-blue-200 bg-white text-blue-700"
+            }`}
+          >
+            {soloSelezionati ? "Mostra tutti i prodotti" : `Solo selezionati (${numeroRigheOrdine})`}
+          </button>
+        </section>
+
+        <section className="rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setRiepilogoAperto(!riepilogoAperto)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+          >
+            <div>
+              <p className="text-[11px] font-black uppercase text-blue-600">Riepilogo ordine</p>
+              <p className="mt-1 text-sm font-black text-slate-950">
+                {numeroRigheOrdine} prodotti · Quantità totale {quantitaTotaleOrdine}
+              </p>
+            </div>
+            <span className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
+              {riepilogoAperto ? "Chiudi" : "Apri"}
+            </span>
+          </button>
+
+          {riepilogoAperto && (
+            <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+              {prodottiSelezionati.map((prodotto) => (
+                <div key={prodotto.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-black text-slate-900">{prodotto.nome_prodotto}</p>
+                    <p className="text-[10px] font-bold text-slate-500">{prodotto.supplier_code || "-"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">{quantita[prodotto.id]}</span>
+                    <button
+                      type="button"
+                      onClick={() => aggiornaQuantita(prodotto.id, "")}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-sm font-black text-red-700"
+                      aria-label={`Rimuovi ${prodotto.nome_prodotto}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {righeLibereSelezionate.map((riga, index) => (
+                <div key={`${riga.nome_prodotto}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-black text-slate-900">{riga.nome_prodotto}</p>
+                    <p className="text-[10px] font-bold text-amber-700">Fuori lista · {riga.misura}</p>
+                  </div>
+                  <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">{riga.quantita}</span>
+                </div>
+              ))}
+
+              {numeroRigheOrdine === 0 && (
+                <p className="text-sm font-bold text-slate-500">Nessun prodotto selezionato.</p>
+              )}
+            </div>
+          )}
         </section>
 
         <input
@@ -615,11 +759,11 @@ settimana_key: settimanaKey,
                           type="number"
                           inputMode="decimal"
                           placeholder={String(prodotto.consigliato || 0)}
-                          value={quantita[prodotto.nome_prodotto] || ""}
+                          value={quantita[prodotto.id] || ""}
                           disabled={!!blocco || isSaving}
                           onChange={(e) =>
                             aggiornaQuantita(
-                              prodotto.nome_prodotto,
+                              prodotto.id,
                               e.target.value
                             )
                           }
@@ -673,20 +817,35 @@ settimana_key: settimanaKey,
                           </div>
                         </div>
 
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          placeholder={String(prodotto.consigliato || 0)}
-                          value={quantita[prodotto.nome_prodotto] || ""}
-                          disabled={!!blocco || isSaving}
-                          onChange={(e) =>
-                            aggiornaQuantita(
-                              prodotto.nome_prodotto,
-                              e.target.value
-                            )
-                          }
-                          className="h-12 w-20 shrink-0 rounded-xl border-2 border-slate-300 bg-white text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-200"
-                        />
+                        <div className="flex shrink-0 items-center gap-1 rounded-xl border-2 border-slate-200 bg-slate-50 p-1">
+                          <button
+                            type="button"
+                            onClick={() => cambiaQuantita(prodotto.id, -1)}
+                            disabled={!!blocco || isSaving}
+                            className="flex h-11 w-10 items-center justify-center rounded-lg bg-white text-xl font-black text-slate-800 shadow-sm disabled:text-slate-300"
+                            aria-label={`Diminuisci quantità ${prodotto.nome_prodotto}`}
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder={String(prodotto.consigliato || 0)}
+                            value={quantita[prodotto.id] || ""}
+                            disabled={!!blocco || isSaving}
+                            onChange={(e) => aggiornaQuantita(prodotto.id, e.target.value)}
+                            className="h-11 w-14 bg-transparent text-center text-lg font-black text-slate-950 outline-none disabled:text-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => cambiaQuantita(prodotto.id, 1)}
+                            disabled={!!blocco || isSaving}
+                            className="flex h-11 w-10 items-center justify-center rounded-lg bg-blue-600 text-xl font-black text-white shadow-sm disabled:bg-slate-300"
+                            aria-label={`Aumenta quantità ${prodotto.nome_prodotto}`}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )
@@ -735,17 +894,33 @@ settimana_key: settimanaKey,
           className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-4"
         />
 
-        <input
-          type="number"
-          inputMode="decimal"
-          placeholder="Quantità"
-          value={riga.quantita}
-          disabled={!!blocco || isSaving}
-          onChange={(e) =>
-            aggiornaLibera(index, "quantita", e.target.value)
-          }
-          className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-2"
-        />
+        <div className="flex h-14 items-center gap-1 rounded-2xl border-2 border-slate-300 bg-white p-1 lg:col-span-2">
+          <button
+            type="button"
+            onClick={() => cambiaQuantitaLibera(index, -1)}
+            disabled={!!blocco || isSaving}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl font-black text-slate-800 disabled:text-slate-300"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="Qtà"
+            value={riga.quantita}
+            disabled={!!blocco || isSaving}
+            onChange={(e) => aggiornaLibera(index, "quantita", e.target.value)}
+            className="h-10 min-w-0 flex-1 bg-transparent text-center text-base font-black text-slate-950 outline-none disabled:text-slate-500"
+          />
+          <button
+            type="button"
+            onClick={() => cambiaQuantitaLibera(index, 1)}
+            disabled={!!blocco || isSaving}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xl font-black text-white disabled:bg-slate-300"
+          >
+            +
+          </button>
+        </div>
 
         <button
           onClick={() => rimuoviRigaLibera(index)}
@@ -772,7 +947,7 @@ settimana_key: settimanaKey,
           disabled={!!blocco || isSaving}
           className="hidden h-12 w-full items-center justify-center rounded-xl bg-blue-700 px-5 text-base font-bold text-white disabled:bg-slate-400 sm:flex"
         >
-          {isSaving ? "Invio ordine..." : "Salva ordine"}
+          {isSaving ? "Invio ordine..." : `Salva ordine · ${numeroRigheOrdine} prodotti`}
         </button>
       </div>
 
@@ -782,7 +957,7 @@ settimana_key: settimanaKey,
           disabled={!!blocco || isSaving}
           className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-700 px-5 text-base font-bold text-white disabled:bg-slate-400"
         >
-          {isSaving ? "Invio ordine..." : "Salva ordine"}
+          {isSaving ? "Invio ordine..." : `Salva ordine · ${numeroRigheOrdine} prodotti`}
         </button>
       </div>
     </main>

@@ -220,8 +220,10 @@ export default function AdminStoricoFatture() {
     window.location.href = "/admin-dashboard"
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
+    localStorage.removeItem("admin_mode")
     window.location.href = "/admin"
   }
 

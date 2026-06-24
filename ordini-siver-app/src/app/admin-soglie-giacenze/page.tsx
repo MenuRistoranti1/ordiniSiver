@@ -174,9 +174,11 @@ export default function AdminSoglieGiacenze() {
     caricaSoglie(localeId)
   }
 
-  function logout() {
+  async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
-    window.location.href = "/"
+    localStorage.removeItem("admin_mode")
+    window.location.href = "/admin"
   }
 
   return (

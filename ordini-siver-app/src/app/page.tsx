@@ -7,29 +7,47 @@ export default function Home() {
   const [locali, setLocali] = useState<any[]>([])
   const [localeId, setLocaleId] = useState("")
   const [pin, setPin] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [errore, setErrore] = useState("")
 
   useEffect(() => {
     caricaLocali()
   }, [])
 
   async function caricaLocali() {
-    const { data } = await supabase
+    setLoading(true)
+    setErrore("")
+
+    console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+
+    const { data, error } = await supabase
       .from("restaurants")
-      .select("id, name, pin_code")
+      .select("id, name, pin_code, active")
       .order("name", { ascending: true })
 
+    console.log("LOCALI DATA:", data)
+    console.log("LOCALI ERROR:", error)
+
+    if (error) {
+      setErrore(error.message)
+      setLocali([])
+      setLoading(false)
+      return
+    }
+
     setLocali(data || [])
+    setLoading(false)
   }
 
   function entra() {
-    const locale = locali.find((l) => l.id === localeId)
+    const locale = locali.find((l) => String(l.id) === String(localeId))
 
     if (!locale) {
       alert("Seleziona un locale")
       return
     }
 
-    if (String(locale.pin_code) !== String(pin)) {
+    if (String(locale.pin_code).trim() !== String(pin).trim()) {
       alert("PIN errato")
       return
     }
@@ -41,7 +59,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-8 flex items-center justify-center">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8">
       <div className="w-full max-w-xl rounded-3xl bg-white p-5 shadow-2xl sm:p-10">
         <div className="mb-8 rounded-3xl bg-slate-950 p-5 text-white">
           <h1 className="text-4xl font-black tracking-tight sm:text-6xl">
@@ -53,6 +71,12 @@ export default function Home() {
           </p>
         </div>
 
+        {errore && (
+          <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-700">
+            Errore caricamento locali: {errore}
+          </div>
+        )}
+
         <label className="mb-2 block text-sm font-black uppercase text-slate-700">
           Locale
         </label>
@@ -60,9 +84,12 @@ export default function Home() {
         <select
           value={localeId}
           onChange={(e) => setLocaleId(e.target.value)}
-          className="mb-5 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 outline-none focus:border-blue-600"
+          disabled={loading}
+          className="mb-5 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-100"
         >
-          <option value="">Seleziona locale</option>
+          <option value="">
+            {loading ? "Caricamento locali..." : "Seleziona locale"}
+          </option>
 
           {locali.map((locale) => (
             <option key={locale.id} value={locale.id}>
@@ -88,16 +115,14 @@ export default function Home() {
 
         <button
           onClick={entra}
-          className="h-14 w-full rounded-2xl bg-blue-600 text-xl font-black text-white shadow-lg active:scale-[0.99]"
+          disabled={loading}
+          className="h-14 w-full rounded-2xl bg-blue-600 text-xl font-black text-white shadow-lg active:scale-[0.99] disabled:bg-slate-400"
         >
           Entra
         </button>
 
         <div className="mt-8 text-center">
-          <a
-            href="/admin"
-            className="text-base font-bold text-slate-700 underline"
-          >
+          <a href="/admin" className="text-base font-bold text-slate-700 underline">
             Accesso Admin
           </a>
         </div>

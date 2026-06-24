@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
 type TopItem = {
   nome: string
@@ -538,70 +539,7 @@ export default function Dashboard() {
 
         <section className="min-w-0 flex-1 px-3 py-4 sm:px-5 lg:ml-72 lg:px-6 xl:px-8">
           <div className="mx-auto w-full max-w-7xl space-y-4">
-            <div className="rounded-3xl bg-slate-950 p-4 text-white shadow-lg lg:hidden">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h1 className="text-lg font-black tracking-tight">
-                    OrdiniSiver
-                  </h1>
-                  <p className="mt-0.5 text-xs font-bold text-slate-300">
-                    Area Locale
-                  </p>
-                </div>
-
-                <button
-                  onClick={logout}
-                  className="rounded-xl bg-red-500 px-3 py-2 text-xs font-black text-white"
-                >
-                  {isAdminAccess ? "Esci" : "Logout"}
-                </button>
-              </div>
-
-              {isAdminAccess && (
-                <button
-                  onClick={vaiAdmin}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
-                >
-                  <Shield className="h-4 w-4" />
-                  Torna dashboard admin
-                </button>
-              )}
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => vai("/giacenze")}
-                  className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
-                >
-                  Giacenze
-                </button>
-
-                <button
-                  onClick={vaiNuovoOrdine}
-                  className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
-                >
-                  Nuovo ordine
-                </button>
-
-                <button
-                  onClick={() => vai("/storico-ordini")}
-                  className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
-                >
-                  Storico ordini
-                </button>
-
-                <button
-                  onClick={() => vai("/messaggi")}
-                  className="relative rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-white"
-                >
-                  Messaggi
-                  {messaggiNonLetti > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 animate-pulse rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black">
-                      {messaggiNonLetti}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
+            <LocaleMobileHeader unreadCount={messaggiNonLetti} />
 
             <header className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
 export default function StoricoGiacenze() {
   const { showToast } = useToast()
@@ -261,7 +262,9 @@ export default function StoricoGiacenze() {
     <main className="min-h-screen bg-slate-100 px-3 py-4 sm:px-5 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-4">
 
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
+        <LocaleMobileHeader />
+
+        <section className="hidden rounded-2xl bg-slate-950 p-4 text-white shadow-lg lg:block">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-bold tracking-tight sm:text-xl">
