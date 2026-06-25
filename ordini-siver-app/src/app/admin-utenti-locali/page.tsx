@@ -79,7 +79,7 @@ export default function AdminUtentiLocaliPage() {
             id,
             restaurant_id,
             active,
-            restaurants (id, name)
+            restaurants!locale_user_assignments_restaurant_id_fkey (id, name)
           )
         `)
         .order("nome", { ascending: true }),
