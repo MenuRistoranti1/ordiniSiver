@@ -2,18 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import nodemailer from "nodemailer"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-})
+export const runtime = "nodejs"
 
 function getSettimanaKey() {
   const oggi = new Date()
@@ -29,6 +18,26 @@ function getSettimanaKey() {
 
 export async function GET() {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !serviceKey) {
+      return NextResponse.json(
+        { error: "Variabili Supabase mancanti" },
+        { status: 500 }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey)
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    })
+
     const settimanaKey = getSettimanaKey()
 
     const { data: locali, error: localiError } = await supabase
@@ -36,9 +45,7 @@ export async function GET() {
       .select("*")
 
     if (localiError) {
-      return NextResponse.json({
-        error: localiError.message,
-      })
+      return NextResponse.json({ error: localiError.message })
     }
 
     const risultatiEmail: any[] = []
@@ -61,9 +68,7 @@ export async function GET() {
       const mancaGiacenza = !giacenze || giacenze.length === 0
       const mancaOrdine = !ordini || ordini.length === 0
 
-      if (!(mancaGiacenza || mancaOrdine)) {
-        continue
-      }
+      if (!(mancaGiacenza || mancaOrdine)) continue
 
       const tipoAlert =
         mancaGiacenza && mancaOrdine
@@ -87,13 +92,10 @@ export async function GET() {
           saltato: true,
           motivo: "Alert già inviato",
         })
-
         continue
       }
 
-      if (!locale.email) {
-        continue
-      }
+      if (!locale.email) continue
 
       try {
         await transporter.sendMail({
@@ -103,34 +105,21 @@ export async function GET() {
           html: `
             <div style="font-family:Arial;padding:40px;background:#f4f7fb">
               <div style="max-width:700px;margin:auto;background:white;border-radius:20px;padding:40px">
-
-                <h1 style="color:#07132b;font-size:34px;margin-bottom:10px">
-                  OrdiniSiver
-                </h1>
-
-                <p style="font-size:20px;color:#666">
-                  Promemoria compilazione settimanale
-                </p>
-
+                <h1 style="color:#07132b;font-size:34px;margin-bottom:10px">OrdiniSiver</h1>
+                <p style="font-size:20px;color:#666">Promemoria compilazione settimanale</p>
                 <div style="margin-top:30px;padding:25px;background:#fff5f5;border:3px solid #dc2626;border-radius:20px">
-                  <h2 style="color:#dc2626;font-size:28px;margin-bottom:20px">
-                    ⚠ Azione richiesta
-                  </h2>
-
+                  <h2 style="color:#dc2626;font-size:28px;margin-bottom:20px">⚠ Azione richiesta</h2>
                   <p style="font-size:20px;color:#111">
                     Il locale <strong>${locale.name}</strong> non ha ancora completato:
                   </p>
-
                   <div style="margin-top:20px;font-size:20px;color:#222;line-height:2">
                     ${mancaGiacenza ? "• Giacenze settimanali<br>" : ""}
                     ${mancaOrdine ? "• Ordine settimanale<br>" : ""}
                   </div>
                 </div>
-
                 <p style="margin-top:40px;color:#777;font-size:16px">
                   Questo è un messaggio automatico inviato da OrdiniSiver.
                 </p>
-
               </div>
             </div>
           `,
@@ -176,8 +165,6 @@ export async function GET() {
       risultatiEmail,
     })
   } catch (error: any) {
-    return NextResponse.json({
-      error: error.message,
-    })
+    return NextResponse.json({ error: error.message })
   }
 }

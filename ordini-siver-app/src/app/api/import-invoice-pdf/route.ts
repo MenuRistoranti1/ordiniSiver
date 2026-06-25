@@ -5,11 +5,6 @@ const pdf = require("pdf-parse/lib/pdf-parse.js")
 
 export const runtime = "nodejs"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-const supabase = createClient(supabaseUrl, serviceKey)
-
 function numeroIT(value: string) {
   const cleaned = String(value || "")
     .replace("€", "")
@@ -132,21 +127,24 @@ function parseRows(text: string) {
   return rows
 }
 
-async function creaNotifica({
-  type,
-  title,
-  message,
-  severity = "info",
-  source = "import-invoice-pdf",
-  source_id,
-}: {
-  type: string
-  title: string
-  message: string
-  severity?: string
-  source?: string
-  source_id: string
-}) {
+async function creaNotifica(
+  supabase: any,
+  {
+    type,
+    title,
+    message,
+    severity = "info",
+    source = "import-invoice-pdf",
+    source_id,
+  }: {
+    type: string
+    title: string
+    message: string
+    severity?: string
+    source?: string
+    source_id: string
+  }
+) {
   const { data: esistente } = await supabase
     .from("notifications")
     .select("id")
@@ -171,12 +169,17 @@ async function creaNotifica({
 
 export async function POST(req: NextRequest) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
     if (!supabaseUrl || !serviceKey) {
       return NextResponse.json(
         { error: "Variabili Supabase mancanti nel .env.local" },
         { status: 500 }
       )
     }
+
+    const supabase = createClient(supabaseUrl, serviceKey)
 
     const formData = await req.formData()
     const file = formData.get("file") as File | null
@@ -247,7 +250,7 @@ export async function POST(req: NextRequest) {
         product = nuovoProdotto
         created++
 
-        await creaNotifica({
+        await creaNotifica(supabase, {
           type: "product_created_from_invoice",
           title: "Nuovo prodotto creato da fattura",
           message: `${row.product_name} (${row.supplier_code}) creato automaticamente dalla fattura.`,
@@ -333,7 +336,7 @@ export async function POST(req: NextRequest) {
           source: "import_fattura_pdf",
         })
 
-        await creaNotifica({
+        await creaNotifica(supabase, {
           type: variation > 0 ? "price_increase" : "price_decrease",
           title:
             variation > 0
@@ -360,7 +363,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    await creaNotifica({
+    await creaNotifica(supabase, {
       type: "invoice_pdf_import_completed",
       title: "Import fattura PDF completato",
       message: `Fattura ${invoice.invoice_number || ""}: ${

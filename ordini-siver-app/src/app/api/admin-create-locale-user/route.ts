@@ -3,16 +3,19 @@ import { createClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-const supabaseAdmin = createClient(supabaseUrl, serviceKey)
-
 export async function POST(req: NextRequest) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
     if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ error: "Variabili Supabase mancanti" }, { status: 500 })
+      return NextResponse.json(
+        { error: "Variabili Supabase mancanti" },
+        { status: 500 }
+      )
     }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey)
 
     const body = await req.json()
 
@@ -25,11 +28,17 @@ export async function POST(req: NextRequest) {
     const ruoloLocale = String(body.ruolo_nel_locale || "responsabile")
 
     if (!nome || !email || !password) {
-      return NextResponse.json({ error: "Nome, email e password sono obbligatori" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Nome, email e password sono obbligatori" },
+        { status: 400 }
+      )
     }
 
     if (password.length < 8) {
-      return NextResponse.json({ error: "La password deve contenere almeno 8 caratteri" }, { status: 400 })
+      return NextResponse.json(
+        { error: "La password deve contenere almeno 8 caratteri" },
+        { status: 400 }
+      )
     }
 
     const { data: createdUser, error: createError } =
@@ -37,42 +46,63 @@ export async function POST(req: NextRequest) {
         email,
         password,
         email_confirm: true,
-        user_metadata: { nome, cognome, ruolo: ruoloGenerale },
-        app_metadata: { role: "locale" },
+        user_metadata: {
+          nome,
+          cognome,
+          ruolo: ruoloGenerale,
+        },
+        app_metadata: {
+          role: "locale",
+        },
       })
 
     if (createError || !createdUser.user) {
-      return NextResponse.json({ error: createError?.message || "Errore creazione utente Auth" }, { status: 400 })
+      return NextResponse.json(
+        { error: createError?.message || "Errore creazione utente Auth" },
+        { status: 400 }
+      )
     }
 
     const userId = createdUser.user.id
 
-    const { error: profileError } = await supabaseAdmin.from("locale_users").insert({
-      id: userId,
-      nome,
-      cognome: cognome || null,
-      email,
-      ruolo_generale: ruoloGenerale,
-      active: true,
-    })
+    const { error: profileError } = await supabaseAdmin
+      .from("locale_users")
+      .insert({
+        id: userId,
+        nome,
+        cognome: cognome || null,
+        email,
+        ruolo_generale: ruoloGenerale,
+        active: true,
+      })
 
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(userId)
-      return NextResponse.json({ error: profileError.message }, { status: 400 })
+
+      return NextResponse.json(
+        { error: profileError.message },
+        { status: 400 }
+      )
     }
 
     if (restaurantId) {
-      const { error: assignmentError } = await supabaseAdmin.from("locale_user_assignments").insert({
-        user_id: userId,
-        restaurant_id: restaurantId,
-        ruolo_nel_locale: ruoloLocale,
-        active: true,
-        valid_from: new Date().toISOString().split("T")[0],
-      })
+      const { error: assignmentError } = await supabaseAdmin
+        .from("locale_user_assignments")
+        .insert({
+          user_id: userId,
+          restaurant_id: restaurantId,
+          ruolo_nel_locale: ruoloLocale,
+          active: true,
+          valid_from: new Date().toISOString().split("T")[0],
+        })
 
       if (assignmentError) {
         return NextResponse.json(
-          { error: "Utente creato, ma errore assegnazione locale: " + assignmentError.message },
+          {
+            error:
+              "Utente creato, ma errore assegnazione locale: " +
+              assignmentError.message,
+          },
           { status: 400 }
         )
       }
@@ -93,7 +123,10 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ success: true, user_id: userId })
+    return NextResponse.json({
+      success: true,
+      user_id: userId,
+    })
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "Errore creazione utente locale" },
