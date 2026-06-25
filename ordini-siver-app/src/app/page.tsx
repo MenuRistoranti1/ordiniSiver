@@ -1,61 +1,113 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
 
 export default function Home() {
-  const [locali, setLocali] = useState<any[]>([])
-  const [localeId, setLocaleId] = useState("")
-  const [pin, setPin] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
   const [errore, setErrore] = useState("")
 
   useEffect(() => {
-    caricaLocali()
+    verificaSessione()
   }, [])
 
-  async function caricaLocali() {
+  async function verificaSessione() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (user?.app_metadata?.role === "locale") {
+      await caricaProfiloLocale(user.id)
+    }
+  }
+
+  async function caricaProfiloLocale(userId: string) {
+    const { data: profilo, error: profiloError } = await supabase
+      .from("locale_users")
+      .select("id, nome, cognome, username, active")
+      .eq("id", userId)
+      .maybeSingle()
+
+    if (profiloError || !profilo || !profilo.active) {
+      await supabase.auth.signOut()
+      setErrore("Utente non autorizzato o disattivato.")
+      return
+    }
+
+    const { data: assegnazione, error: assegnazioneError } = await supabase
+      .from("locale_user_assignments")
+      .select("restaurant_id, restaurants!locale_user_assignments_restaurant_id_fkey(id, name)")
+      .eq("user_id", userId)
+      .eq("active", true)
+      .maybeSingle()
+
+    if (assegnazioneError || !assegnazione?.restaurants) {
+      await supabase.auth.signOut()
+      setErrore("Nessun locale attivo assegnato a questo responsabile.")
+      return
+    }
+
+    const locale: any = assegnazione.restaurants
+
+    localStorage.setItem("locale_id", String(locale.id))
+    localStorage.setItem("locale_nome", locale.name)
+    localStorage.setItem("restaurant_name", locale.name)
+    localStorage.setItem("user_id", profilo.id)
+    localStorage.setItem("user_name", `${profilo.nome} ${profilo.cognome || ""}`.trim())
+    localStorage.setItem("username", profilo.username || "")
+    localStorage.removeItem("admin_mode")
+
+    await supabase
+      .from("locale_users")
+      .update({ last_login: new Date().toISOString() })
+      .eq("id", userId)
+
+    await supabase.from("activity_log").insert({
+      user_id: profilo.id,
+      user_name: `${profilo.nome} ${profilo.cognome || ""}`.trim(),
+      restaurant_id: locale.id,
+      restaurant_name: locale.name,
+      action: "login_locale",
+      entity: "auth",
+      entity_id: profilo.id,
+      details: {
+        username: profilo.username,
+      },
+    })
+
+    window.location.href = "/dashboard"
+  }
+
+  async function entra(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setLoading(true)
     setErrore("")
 
-    console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+    const usernamePulito = username.trim().toLowerCase()
+    const technicalEmail = `${usernamePulito}@ordinisiver.local`
 
-    const { data, error } = await supabase
-      .from("restaurants")
-      .select("id, name, pin_code, active")
-      .order("name", { ascending: true })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: technicalEmail,
+      password,
+    })
 
-    console.log("LOCALI DATA:", data)
-    console.log("LOCALI ERROR:", error)
-
-    if (error) {
-      setErrore(error.message)
-      setLocali([])
+    if (error || !data.user) {
+      setErrore("Username o password non validi.")
       setLoading(false)
       return
     }
 
-    setLocali(data || [])
+    if (data.user.app_metadata?.role !== "locale") {
+      await supabase.auth.signOut()
+      setErrore("Questo account non è autorizzato come responsabile locale.")
+      setLoading(false)
+      return
+    }
+
+    await caricaProfiloLocale(data.user.id)
     setLoading(false)
-  }
-
-  function entra() {
-    const locale = locali.find((l) => String(l.id) === String(localeId))
-
-    if (!locale) {
-      alert("Seleziona un locale")
-      return
-    }
-
-    if (String(locale.pin_code).trim() !== String(pin).trim()) {
-      alert("PIN errato")
-      return
-    }
-
-    localStorage.setItem("locale_id", locale.id)
-    localStorage.setItem("locale_nome", locale.name)
-
-    window.location.href = "/dashboard"
   }
 
   return (
@@ -67,59 +119,51 @@ export default function Home() {
           </h1>
 
           <p className="mt-2 text-base font-semibold text-slate-200 sm:text-xl">
-            Seleziona il locale e inserisci il PIN.
+            Accedi con username e password.
           </p>
         </div>
 
         {errore && (
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-700">
-            Errore caricamento locali: {errore}
+            {errore}
           </div>
         )}
 
-        <label className="mb-2 block text-sm font-black uppercase text-slate-700">
-          Locale
-        </label>
+        <form onSubmit={entra} autoComplete="off">
+          <label className="mb-2 block text-sm font-black uppercase text-slate-700">
+            Username
+          </label>
 
-        <select
-          value={localeId}
-          onChange={(e) => setLocaleId(e.target.value)}
-          disabled={loading}
-          className="mb-5 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-100"
-        >
-          <option value="">
-            {loading ? "Caricamento locali..." : "Seleziona locale"}
-          </option>
+          <input
+            type="text"
+            placeholder="Inserisci username"
+            value={username}
+            autoComplete="off"
+            onChange={(e) => setUsername(e.target.value)}
+            className="mb-5 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
+          />
 
-          {locali.map((locale) => (
-            <option key={locale.id} value={locale.id}>
-              {locale.name}
-            </option>
-          ))}
-        </select>
+          <label className="mb-2 block text-sm font-black uppercase text-slate-700">
+            Password
+          </label>
 
-        <label className="mb-2 block text-sm font-black uppercase text-slate-700">
-          PIN
-        </label>
+          <input
+            type="password"
+            placeholder="Inserisci password"
+            value={password}
+            autoComplete="current-password"
+            onChange={(e) => setPassword(e.target.value)}
+            className="mb-6 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
+          />
 
-        <input
-          type="password"
-          placeholder="Inserisci PIN locale"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") entra()
-          }}
-          className="mb-6 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-lg font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
-        />
-
-        <button
-          onClick={entra}
-          disabled={loading}
-          className="h-14 w-full rounded-2xl bg-blue-600 text-xl font-black text-white shadow-lg active:scale-[0.99] disabled:bg-slate-400"
-        >
-          Entra
-        </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-14 w-full rounded-2xl bg-blue-600 text-xl font-black text-white shadow-lg active:scale-[0.99] disabled:bg-slate-400"
+          >
+            {loading ? "Accesso..." : "Accedi"}
+          </button>
+        </form>
 
         <div className="mt-8 text-center">
           <a href="/admin" className="text-base font-bold text-slate-700 underline">
