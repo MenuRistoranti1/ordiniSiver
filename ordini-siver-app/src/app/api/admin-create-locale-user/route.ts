@@ -3,6 +3,14 @@ import { createClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
 
+function normalizzaUsername(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ".")
+    .replace(/[^a-z0-9._-]/g, "")
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -21,15 +29,13 @@ export async function POST(req: NextRequest) {
 
     const nome = String(body.nome || "").trim()
     const cognome = String(body.cognome || "").trim()
-    const email = String(body.email || "").trim().toLowerCase()
+    const username = normalizzaUsername(String(body.username || ""))
     const password = String(body.password || "")
-    const ruoloGenerale = String(body.ruolo_generale || "responsabile")
     const restaurantId = body.restaurant_id ? String(body.restaurant_id) : null
-    const ruoloLocale = String(body.ruolo_nel_locale || "responsabile")
 
-    if (!nome || !email || !password) {
+    if (!nome || !cognome || !username || !password || !restaurantId) {
       return NextResponse.json(
-        { error: "Nome, email e password sono obbligatori" },
+        { error: "Nome, cognome, username, password e locale sono obbligatori" },
         { status: 400 }
       )
     }
@@ -41,15 +47,30 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const technicalEmail = `${username}@ordinisiver.local`
+
+    const { data: existingProfile } = await supabaseAdmin
+      .from("locale_users")
+      .select("id")
+      .eq("username", username)
+      .maybeSingle()
+
+    if (existingProfile?.id) {
+      return NextResponse.json(
+        { error: "Username già esistente" },
+        { status: 400 }
+      )
+    }
+
     const { data: createdUser, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: technicalEmail,
         password,
         email_confirm: true,
         user_metadata: {
           nome,
           cognome,
-          ruolo: ruoloGenerale,
+          username,
         },
         app_metadata: {
           role: "locale",
@@ -65,71 +86,78 @@ export async function POST(req: NextRequest) {
 
     const userId = createdUser.user.id
 
+    const { data: locale } = await supabaseAdmin
+      .from("restaurants")
+      .select("id, name")
+      .eq("id", restaurantId)
+      .maybeSingle()
+
     const { error: profileError } = await supabaseAdmin
       .from("locale_users")
       .insert({
         id: userId,
         nome,
-        cognome: cognome || null,
-        email,
-        ruolo_generale: ruoloGenerale,
+        cognome,
+        username,
+        technical_email: technicalEmail,
+        email: null,
+        ruolo_generale: "responsabile",
         active: true,
       })
 
     if (profileError) {
       await supabaseAdmin.auth.admin.deleteUser(userId)
-
       return NextResponse.json(
         { error: profileError.message },
         { status: 400 }
       )
     }
 
-    if (restaurantId) {
-      const { error: assignmentError } = await supabaseAdmin
-        .from("locale_user_assignments")
-        .insert({
-          user_id: userId,
-          restaurant_id: restaurantId,
-          ruolo_nel_locale: ruoloLocale,
-          active: true,
-          valid_from: new Date().toISOString().split("T")[0],
-        })
+    const { error: assignmentError } = await supabaseAdmin
+      .from("locale_user_assignments")
+      .insert({
+        user_id: userId,
+        restaurant_id: restaurantId,
+        ruolo_nel_locale: "responsabile",
+        active: true,
+        valid_from: new Date().toISOString().split("T")[0],
+      })
 
-      if (assignmentError) {
-        return NextResponse.json(
-          {
-            error:
-              "Utente creato, ma errore assegnazione locale: " +
-              assignmentError.message,
-          },
-          { status: 400 }
-        )
-      }
+    if (assignmentError) {
+      return NextResponse.json(
+        {
+          error:
+            "Responsabile creato, ma errore assegnazione locale: " +
+            assignmentError.message,
+        },
+        { status: 400 }
+      )
     }
 
     await supabaseAdmin.from("activity_log").insert({
       user_id: userId,
       user_name: `${nome} ${cognome}`.trim(),
       restaurant_id: restaurantId,
-      action: "locale_user_created",
+      restaurant_name: locale?.name || "",
+      action: "responsabile_creato",
       entity: "locale_users",
       entity_id: userId,
       details: {
-        email,
-        ruolo_generale: ruoloGenerale,
+        username,
+        technical_email: technicalEmail,
         restaurant_id: restaurantId,
-        ruolo_nel_locale: ruoloLocale,
+        restaurant_name: locale?.name || "",
       },
     })
 
     return NextResponse.json({
       success: true,
       user_id: userId,
+      username,
     })
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "Errore creazione utente locale" },
+      { error: error?.message || "Errore creazione responsabile" },
       { status: 500 }
     )
   }
