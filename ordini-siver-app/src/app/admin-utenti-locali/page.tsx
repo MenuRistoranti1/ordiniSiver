@@ -56,42 +56,46 @@ export default function AdminUtentiLocaliPage() {
     setMessaggio("")
   }
 
-  async function caricaTutto() {
-    setLoading(true)
+async function caricaTutto() {
+  setLoading(true)
 
-    const [localiRes, responsabiliRes] = await Promise.all([
-      supabase
-        .from("restaurants")
-        .select("id, name")
-        .eq("active", true)
-        .order("name", { ascending: true }),
-      supabase
-        .from("locale_users")
-        .select(`
-          id,
-          nome,
-          cognome,
-          username,
-          technical_email,
-          active,
-          last_login,
-          locale_user_assignments (
-            id,
-            restaurant_id,
-            active,
-            restaurants!locale_user_assignments_restaurant_id_fkey (id, name)
-          )
-        `)
-        .order("nome", { ascending: true }),
-    ])
+  const [localiRes, responsabiliRes, assegnazioniRes] = await Promise.all([
+    supabase
+      .from("restaurants")
+      .select("id, name")
+      .eq("active", true)
+      .order("name", { ascending: true }),
+    supabase
+      .from("locale_users")
+      .select("id, nome, cognome, username, technical_email, active, last_login")
+      .order("nome", { ascending: true }),
+    supabase
+      .from("locale_user_assignments")
+      .select("id, user_id, restaurant_id, active")
+      .order("created_at", { ascending: false }),
+  ])
 
-    if (localiRes.error) ko(localiRes.error.message)
-    if (responsabiliRes.error) ko(responsabiliRes.error.message)
+  if (localiRes.error) ko(localiRes.error.message)
+  if (responsabiliRes.error) ko(responsabiliRes.error.message)
+  if (assegnazioniRes.error) ko(assegnazioniRes.error.message)
 
-    setLocali(localiRes.data || [])
-    setResponsabili((responsabiliRes.data || []) as unknown as Responsabile[])
-    setLoading(false)
-  }
+  const localiData = localiRes.data || []
+  const assegnazioniData = assegnazioniRes.data || []
+
+  const responsabiliConLocali = (responsabiliRes.data || []).map((resp: any) => ({
+    ...resp,
+    locale_user_assignments: assegnazioniData
+      .filter((a: any) => a.user_id === resp.id)
+      .map((a: any) => ({
+        ...a,
+        restaurants: localiData.find((l: any) => l.id === a.restaurant_id) || null,
+      })),
+  }))
+
+  setLocali(localiData)
+  setResponsabili(responsabiliConLocali as unknown as Responsabile[])
+  setLoading(false)
+}
 
   function normalizzaUsername(value: string) {
     return value
