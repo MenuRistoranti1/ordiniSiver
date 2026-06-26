@@ -22,10 +22,33 @@ export default function Giacenze() {
   const [ordinamento, setOrdinamento] = useState("nome")
 
   useEffect(() => {
-    const id = localStorage.getItem("locale_id") || ""
-    const nome = localStorage.getItem("locale_nome") || ""
+    inizializzaPagina()
+  }, [])
 
-    if (!id) {
+  async function inizializzaPagina() {
+    setLoading(true)
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/"
+      return
+    }
+
+    if (user.app_metadata?.role !== "locale") {
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    const id = String(user.app_metadata?.locale_id || "")
+    const nome = String(user.app_metadata?.locale_nome || "")
+
+    if (!id || !nome) {
+      await supabase.auth.signOut()
       window.location.href = "/"
       return
     }
@@ -33,13 +56,15 @@ export default function Giacenze() {
     setLocaleId(id)
     setLocaleNome(nome)
 
-    caricaProdotti(id)
-    controllaBloccoGiacenze(id)
-  }, [])
+    await Promise.all([
+      caricaProdotti(id),
+      controllaBloccoGiacenze(id),
+    ])
+
+    setLoading(false)
+  }
 
   async function caricaProdotti(id: string) {
-    setLoading(true)
-
     const { data: impostazioni, error } = await supabase
       .from("restaurant_product_settings")
       .select("id, active, min_stock, max_stock, prodotto_id, product_id")
@@ -49,7 +74,6 @@ export default function Giacenze() {
     if (error) {
       console.log(error)
       showToast("Errore caricamento prodotti", "error")
-      setLoading(false)
       return
     }
 
@@ -59,7 +83,6 @@ export default function Giacenze() {
 
     if (idsProdotti.length === 0) {
       setProdotti([])
-      setLoading(false)
       return
     }
 
@@ -72,7 +95,6 @@ export default function Giacenze() {
     if (errorProdotti) {
       console.log(errorProdotti)
       showToast("Errore caricamento prodotti", "error")
-      setLoading(false)
       return
     }
 
@@ -110,11 +132,12 @@ export default function Giacenze() {
       })
       .filter(Boolean)
       .sort((a: any, b: any) =>
-        String(a.nome_prodotto || "").localeCompare(String(b.nome_prodotto || ""))
+        String(a.nome_prodotto || "").localeCompare(
+          String(b.nome_prodotto || "")
+        )
       )
 
     setProdotti(prodottiFormattati)
-    setLoading(false)
   }
 
   function statoSoglia(prodotto: any) {
@@ -193,8 +216,11 @@ export default function Giacenze() {
     aggiornaQuantita(idProdotto, nuova === 0 ? "" : String(nuova))
   }
 
-  function logout() {
-    localStorage.clear()
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
     window.location.href = "/"
   }
 
@@ -261,6 +287,13 @@ export default function Giacenze() {
   async function salvaGiacenze() {
     if (isSaving) return
 
+    if (!localeId || !localeNome) {
+      showToast("Sessione locale non valida. Effettua di nuovo il login.", "error")
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
     if (blocco) {
       showToast(blocco, "warning")
       return
@@ -316,7 +349,7 @@ export default function Giacenze() {
             <div>
               <h1 className="text-xl font-black">OrdiniSiver</h1>
               <p className="text-sm font-bold text-slate-300">
-                Giacenze settimana · {localeNome}
+                Giacenze settimana · {localeNome || "Caricamento..."}
               </p>
             </div>
 
@@ -406,12 +439,21 @@ export default function Giacenze() {
 
         <section className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white p-3 shadow-sm">
-            <p className="text-[11px] font-black uppercase text-slate-500">Prodotti compilati</p>
-            <p className="mt-1 text-2xl font-black text-slate-950">{prodottiCompilati}</p>
+            <p className="text-[11px] font-black uppercase text-slate-500">
+              Prodotti compilati
+            </p>
+            <p className="mt-1 text-2xl font-black text-slate-950">
+              {prodottiCompilati}
+            </p>
           </div>
+
           <div className="rounded-2xl bg-white p-3 shadow-sm">
-            <p className="text-[11px] font-black uppercase text-slate-500">Quantità totale</p>
-            <p className="mt-1 text-2xl font-black text-slate-950">{quantitaTotaleCompilata}</p>
+            <p className="text-[11px] font-black uppercase text-slate-500">
+              Quantità totale
+            </p>
+            <p className="mt-1 text-2xl font-black text-slate-950">
+              {quantitaTotaleCompilata}
+            </p>
           </div>
         </section>
 
@@ -469,10 +511,7 @@ export default function Giacenze() {
                           value={quantita[prodotto.id] || ""}
                           disabled={!!blocco || isSaving}
                           onChange={(e) =>
-                            aggiornaQuantita(
-                              prodotto.id,
-                              e.target.value
-                            )
+                            aggiornaQuantita(prodotto.id, e.target.value)
                           }
                           className="h-10 w-full rounded-lg border-2 border-slate-300 bg-white px-3 text-right text-sm font-bold text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700"
                         />
@@ -526,14 +565,18 @@ export default function Giacenze() {
                           >
                             −
                           </button>
+
                           <input
                             type="number"
                             inputMode="decimal"
                             value={quantita[prodotto.id] || ""}
                             disabled={!!blocco || isSaving}
-                            onChange={(e) => aggiornaQuantita(prodotto.id, e.target.value)}
+                            onChange={(e) =>
+                              aggiornaQuantita(prodotto.id, e.target.value)
+                            }
                             className="h-11 w-14 bg-transparent text-center text-lg font-black text-slate-950 outline-none disabled:text-slate-500"
                           />
+
                           <button
                             type="button"
                             onClick={() => cambiaQuantita(prodotto.id, 1)}
@@ -565,7 +608,9 @@ export default function Giacenze() {
             disabled={!!blocco || isSaving || loading}
             className="h-14 w-full rounded-2xl bg-blue-700 px-5 text-base font-black text-white disabled:bg-slate-400"
           >
-            {isSaving ? "Salvataggio..." : `Salva giacenze · ${prodottiCompilati} prodotti`}
+            {isSaving
+              ? "Salvataggio..."
+              : `Salva giacenze · ${prodottiCompilati} prodotti`}
           </button>
         </div>
       </div>

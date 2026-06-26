@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
-  ArrowLeft,
   BarChart3,
   Bell,
   CheckCircle2,
@@ -13,7 +12,6 @@ import {
   Package,
   RefreshCw,
   Send,
-  Shield,
   ShoppingCart,
   TrendingUp,
   Warehouse,
@@ -32,7 +30,6 @@ export default function Dashboard() {
 
   const [localeNome, setLocaleNome] = useState("")
   const [localeId, setLocaleId] = useState("")
-  const [isAdminAccess, setIsAdminAccess] = useState(false)
 
   const [giacenzeOk, setGiacenzeOk] = useState(false)
   const [messaggiNonLetti, setMessaggiNonLetti] = useState(0)
@@ -43,27 +40,46 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const admin = localStorage.getItem("admin") === "true"
-    const id = localStorage.getItem("locale_id") || ""
-    const nome =
-      localStorage.getItem("locale_nome") ||
-      localStorage.getItem("restaurant_name") ||
-      ""
+    inizializzaDashboard()
+  }, [])
 
-    setIsAdminAccess(admin)
+  async function inizializzaDashboard() {
+    setLoading(true)
 
-    if (!id) {
-      window.location.href = admin ? "/admin-dashboard" : "/"
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/"
+      return
+    }
+
+    const ruolo = user.app_metadata?.role
+
+    if (ruolo !== "locale") {
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    const id = String(user.app_metadata?.locale_id || "")
+    const nome = String(user.app_metadata?.locale_nome || "")
+
+    if (!id || !nome) {
+      await supabase.auth.signOut()
+      window.location.href = "/"
       return
     }
 
     setLocaleId(id)
+    setLocaleNome(nome)
 
-    if (nome) setLocaleNome(nome)
-    else caricaNomeLocale(id)
+    await caricaTutto(id, false)
 
-    caricaTutto(id, false)
-  }, [])
+    setLoading(false)
+  }
 
   async function caricaNomeLocale(id: string) {
     const { data, error } = await supabase
@@ -78,10 +94,7 @@ export default function Dashboard() {
       return
     }
 
-    const nome = data?.name || "Locale"
-
-    localStorage.setItem("locale_nome", nome)
-    setLocaleNome(nome)
+    setLocaleNome(data?.name || "Locale")
   }
 
   function getInizioSettimanaIso() {
@@ -237,30 +250,16 @@ export default function Dashboard() {
     }
   }
 
-  function logout() {
-    if (isAdminAccess) {
-      localStorage.removeItem("locale_id")
-      localStorage.removeItem("locale_nome")
-      localStorage.removeItem("restaurant_name")
-      window.location.href = "/admin-dashboard"
-      return
-    }
-
-    localStorage.clear()
-    window.location.href = "/"
-  }
-
-  function logoutCompleto() {
-    localStorage.clear()
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
     window.location.href = "/"
   }
 
   function vai(percorso: string) {
     window.location.href = percorso
-  }
-
-  function vaiAdmin() {
-    window.location.href = "/admin-dashboard"
   }
 
   function vaiNuovoOrdine() {
@@ -363,7 +362,9 @@ export default function Dashboard() {
             <p className="mt-1 text-xs font-bold text-slate-500">{note}</p>
           </div>
 
-          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${color}`}>
+          <div
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${color}`}
+          >
             <Icon className="h-6 w-6" />
           </div>
         </div>
@@ -461,13 +462,6 @@ export default function Dashboard() {
             <p className="mt-1 text-xs font-bold text-slate-300">
               Area Locale
             </p>
-
-            {isAdminAccess && (
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1 text-[11px] font-black uppercase">
-                <Shield className="h-3 w-3" />
-                Accesso admin
-              </div>
-            )}
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto pr-1">
@@ -508,14 +502,6 @@ export default function Dashboard() {
               onClick={() => vai("/messaggi")}
               badge={messaggiNonLetti}
             />
-
-            {isAdminAccess && (
-              <SidebarButton
-                label="Torna admin"
-                icon={ArrowLeft}
-                onClick={vaiAdmin}
-              />
-            )}
           </nav>
 
           <div className="space-y-2">
@@ -523,17 +509,8 @@ export default function Dashboard() {
               onClick={logout}
               className="w-full rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white transition-all duration-200 hover:bg-red-600 active:scale-[0.98]"
             >
-              {isAdminAccess ? "Esci dal locale" : "Logout"}
+              Logout
             </button>
-
-            {isAdminAccess && (
-              <button
-                onClick={logoutCompleto}
-                className="w-full rounded-2xl bg-slate-800 px-4 py-3 text-xs font-black text-white transition-all duration-200 hover:bg-slate-700 active:scale-[0.98]"
-              >
-                Logout completo
-              </button>
-            )}
           </div>
         </aside>
 
@@ -560,7 +537,9 @@ export default function Dashboard() {
                   disabled={loading}
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition-all duration-200 hover:bg-blue-700 disabled:bg-slate-400"
                 >
-                  <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
+                  />
                   {loading ? "Aggiorno..." : "Aggiorna"}
                 </button>
               </div>

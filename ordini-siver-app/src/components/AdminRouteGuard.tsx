@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
 type StatoAccesso = "verifica" | "autorizzato" | "negato"
 
 export default function AdminRouteGuard({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [stato, setStato] = useState<StatoAccesso>("verifica")
 
   useEffect(() => {
@@ -17,55 +19,45 @@ export default function AdminRouteGuard({ children }: { children: ReactNode }) {
         error,
       } = await supabase.auth.getUser()
 
+      if (!attivo) return
+
       const adminAutorizzato =
         !error && user?.app_metadata?.role === "admin"
-
-      if (!attivo) return
 
       if (!adminAutorizzato) {
         localStorage.removeItem("admin")
         localStorage.removeItem("admin_mode")
         setStato("negato")
-        window.location.replace("/admin")
+
+        if (window.location.pathname !== "/admin") {
+          router.replace("/admin")
+        }
+
         return
       }
 
-      // Compatibilità temporanea con le pagine esistenti.
-      // La sicurezza reale deriva dalla sessione Supabase verificata sopra.
       localStorage.setItem("admin", "true")
+      localStorage.setItem("admin_mode", "true")
       setStato("autorizzato")
     }
 
     verificaAccesso()
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (!attivo) return
-
-      if (event === "SIGNED_OUT") {
-        localStorage.removeItem("admin")
-        localStorage.removeItem("admin_mode")
-        window.location.replace("/admin")
-      }
-    })
-
     return () => {
       attivo = false
-      subscription.unsubscribe()
     }
-  }, [])
+  }, [router])
 
-  if (stato !== "autorizzato") {
+  if (stato === "verifica") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f4f7fb] p-6">
-        <div className="rounded-3xl bg-white p-8 text-center shadow">
-          <p className="text-lg font-black text-slate-900">
-            Verifica accesso amministratore...
-          </p>
-        </div>
-      </main>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-600">
+        Verifica accesso admin...
+      </div>
     )
+  }
+
+  if (stato === "negato") {
+    return null
   }
 
   return <>{children}</>

@@ -1,16 +1,15 @@
 import type { ReactNode } from "react"
 import AdminRouteGuard from "@/components/AdminRouteGuard"
-import AdminAppHeader from "@/components/AdminAppHeader"
+import AdminShell from "@/components/AdminShell"
 
-export default function ProtectedAdminLayout({
+export default function AdminDashboardLayout({
   children,
 }: {
   children: ReactNode
 }) {
   return (
     <AdminRouteGuard>
-      <AdminAppHeader />
-      {children}
+      <AdminShell>{children}</AdminShell>
     </AdminRouteGuard>
   )
 }

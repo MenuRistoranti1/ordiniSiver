@@ -34,10 +34,33 @@ export default function NuovoOrdine() {
   const [riepilogoAperto, setRiepilogoAperto] = useState(false)
 
   useEffect(() => {
-    const id = localStorage.getItem("locale_id") || ""
-    const nome = localStorage.getItem("locale_nome") || ""
+    inizializzaPagina()
+  }, [])
 
-    if (!id) {
+  async function inizializzaPagina() {
+    setLoading(true)
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/"
+      return
+    }
+
+    if (user.app_metadata?.role !== "locale") {
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    const id = String(user.app_metadata?.locale_id || "")
+    const nome = String(user.app_metadata?.locale_nome || "")
+
+    if (!id || !nome) {
+      await supabase.auth.signOut()
       window.location.href = "/"
       return
     }
@@ -45,9 +68,10 @@ export default function NuovoOrdine() {
     setLocaleId(id)
     setLocaleNome(nome)
 
-    caricaProdotti(id)
-    controllaBloccoOrdine(id)
-  }, [])
+    await Promise.all([caricaProdotti(id), controllaBloccoOrdine(id)])
+
+    setLoading(false)
+  }
 
   function sabatoCorrente() {
     const oggi = new Date()
@@ -78,7 +102,8 @@ export default function NuovoOrdine() {
     const { data: giacenze } = await supabase
       .from("giacenze_settimana")
       .select("id")
-      .eq("locale_id", String(id))
+      .eq("locale_id", id)
+      .eq("settimana_key", settimanaKey)
       .limit(1)
 
     if (!giacenze || giacenze.length === 0) {
@@ -90,9 +115,10 @@ export default function NuovoOrdine() {
 
     const { data: ordini, error } = await supabase
       .from("ordini")
-      .select("*")
-      .eq("locale_id", String(id))
+      .select("id")
+      .eq("locale_id", id)
       .eq("settimana_key", settimanaKey)
+      .limit(1)
 
     console.log("CONTROLLO ORDINI:", ordini)
     console.log("ERRORE ORDINI:", error)
@@ -104,10 +130,7 @@ export default function NuovoOrdine() {
     }
   }
 
-
   async function caricaProdotti(id: string) {
-    setLoading(true)
-
     const { data: impostazioni, error: errorImpostazioni } = await supabase
       .from("restaurant_product_settings")
       .select("id, active, min_stock, max_stock, prodotto_id, product_id")
@@ -117,13 +140,18 @@ export default function NuovoOrdine() {
     if (errorImpostazioni) {
       console.log("Errore impostazioni:", errorImpostazioni)
       showToast("Errore caricamento prodotti", "error")
-      setLoading(false)
       return
     }
 
     const idsProdotti = (impostazioni || [])
       .map((item: any) => item.prodotto_id || item.product_id)
       .filter(Boolean)
+
+    if (idsProdotti.length === 0) {
+      setProdotti([])
+      setQuantita({})
+      return
+    }
 
     const { data: prodottiDb, error: errorProdotti } = await supabase
       .from("products")
@@ -134,7 +162,6 @@ export default function NuovoOrdine() {
     if (errorProdotti) {
       console.log("Errore prodotti:", errorProdotti)
       showToast("Errore caricamento prodotti", "error")
-      setLoading(false)
       return
     }
 
@@ -154,14 +181,13 @@ export default function NuovoOrdine() {
 
     const { data: giacenzeDb, error: errorGiacenze } = await supabase
       .from("giacenze_settimana")
-      .select("nome_prodotto, quantita, created_at")
+      .select("nome_prodotto, quantita, created_at, settimana_key")
       .eq("locale_id", id)
       .order("created_at", { ascending: false })
 
     if (errorGiacenze) {
       console.log("Errore giacenze:", errorGiacenze)
       showToast("Errore caricamento giacenze", "error")
-      setLoading(false)
       return
     }
 
@@ -251,9 +277,7 @@ export default function NuovoOrdine() {
 
     setProdotti(prodottiFormattati)
     setQuantita(qtaIniziali)
-    setLoading(false)
   }
-
 
   function statoSoglia(prodotto: any) {
     const qta = Number(prodotto.giacenza || 0)
@@ -304,6 +328,11 @@ export default function NuovoOrdine() {
   }
 
   function rimuoviRigaLibera(index: number) {
+    if (righeLibere.length === 1) {
+      setRigheLibere([{ nome_prodotto: "", misura: "", quantita: "" }])
+      return
+    }
+
     setRigheLibere(righeLibere.filter((_, i) => i !== index))
   }
 
@@ -322,11 +351,15 @@ export default function NuovoOrdine() {
 
   function svuotaOrdine() {
     setQuantita({})
+    setRigheLibere([{ nome_prodotto: "", misura: "", quantita: "" }])
     showToast("Ordine svuotato", "success")
   }
 
-  function logout() {
-    localStorage.clear()
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
     window.location.href = "/"
   }
 
@@ -356,7 +389,9 @@ export default function NuovoOrdine() {
 
     if (ordinamento === "codice") {
       lista.sort((a, b) =>
-        String(a.supplier_code || "").localeCompare(String(b.supplier_code || ""))
+        String(a.supplier_code || "").localeCompare(
+          String(b.supplier_code || "")
+        )
       )
     }
 
@@ -390,7 +425,8 @@ export default function NuovoOrdine() {
       Number(riga.quantita || 0) > 0
   )
 
-  const numeroRigheOrdine = prodottiSelezionati.length + righeLibereSelezionate.length
+  const numeroRigheOrdine =
+    prodottiSelezionati.length + righeLibereSelezionate.length
 
   const quantitaTotaleOrdine =
     prodottiSelezionati.reduce(
@@ -404,6 +440,13 @@ export default function NuovoOrdine() {
 
   async function salvaOrdine() {
     if (isSaving) return
+
+    if (!localeId || !localeNome) {
+      showToast("Sessione locale non valida. Effettua di nuovo il login.", "error")
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
 
     if (blocco) {
       showToast(blocco, "warning")
@@ -435,20 +478,16 @@ export default function NuovoOrdine() {
     const settimanaKey = getSettimanaKey()
 
     const righeProdotti = prodotti
-      .filter(
-        (p) =>
-          quantita[p.id] &&
-          Number(quantita[p.id]) > 0
-      )
+      .filter((p) => quantita[p.id] && Number(quantita[p.id]) > 0)
       .map((p) => ({
         locale_id: localeId,
         locale_nome: localeNome,
         responsabile: responsabile.trim(),
-nome_prodotto: p.nome_prodotto,
-supplier_code: p.supplier_code || "",
-misure: "",
-quantita: Number(quantita[p.id]),
-settimana_key: settimanaKey,
+        nome_prodotto: p.nome_prodotto,
+        supplier_code: p.supplier_code || "",
+        misure: "",
+        quantita: Number(quantita[p.id]),
+        settimana_key: settimanaKey,
       }))
 
     const righeLibereValide = righeLibere
@@ -464,6 +503,7 @@ settimana_key: settimanaKey,
         locale_nome: localeNome,
         responsabile: responsabile.trim(),
         nome_prodotto: riga.nome_prodotto.trim(),
+        supplier_code: "",
         misure: riga.misura.trim(),
         quantita: Number(riga.quantita),
         settimana_key: settimanaKey,
@@ -523,7 +563,7 @@ settimana_key: settimanaKey,
               </h1>
 
               <p className="mt-0.5 text-xs font-medium text-slate-300">
-                Nuovo ordine · {localeNome}
+                Nuovo ordine · {localeNome || "Caricamento..."}
               </p>
             </div>
 
@@ -561,7 +601,8 @@ settimana_key: settimanaKey,
           </h2>
 
           <p className="mt-1 text-xs font-bold text-slate-700 sm:text-sm">
-            Ordine consigliato con soglie e media storica delle ultime 4 settimane.
+            Ordine consigliato con soglie e media storica delle ultime 4
+            settimane.
           </p>
         </section>
 
@@ -624,10 +665,14 @@ settimana_key: settimanaKey,
             type="button"
             onClick={() => setSoloSelezionati(!soloSelezionati)}
             className={`h-14 rounded-2xl px-4 text-sm font-bold sm:col-span-2 ${
-              soloSelezionati ? "bg-blue-600 text-white" : "border-2 border-blue-200 bg-white text-blue-700"
+              soloSelezionati
+                ? "bg-blue-600 text-white"
+                : "border-2 border-blue-200 bg-white text-blue-700"
             }`}
           >
-            {soloSelezionati ? "Mostra tutti i prodotti" : `Solo selezionati (${numeroRigheOrdine})`}
+            {soloSelezionati
+              ? "Mostra tutti i prodotti"
+              : `Solo selezionati (${numeroRigheOrdine})`}
           </button>
         </section>
 
@@ -638,9 +683,12 @@ settimana_key: settimanaKey,
             className="flex w-full items-center justify-between gap-3 text-left"
           >
             <div>
-              <p className="text-[11px] font-black uppercase text-blue-600">Riepilogo ordine</p>
+              <p className="text-[11px] font-black uppercase text-blue-600">
+                Riepilogo ordine
+              </p>
               <p className="mt-1 text-sm font-black text-slate-950">
-                {numeroRigheOrdine} prodotti · Quantità totale {quantitaTotaleOrdine}
+                {numeroRigheOrdine} prodotti · Quantità totale{" "}
+                {quantitaTotaleOrdine}
               </p>
             </div>
             <span className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
@@ -651,13 +699,22 @@ settimana_key: settimanaKey,
           {riepilogoAperto && (
             <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
               {prodottiSelezionati.map((prodotto) => (
-                <div key={prodotto.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <div
+                  key={prodotto.id}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-black text-slate-900">{prodotto.nome_prodotto}</p>
-                    <p className="text-[10px] font-bold text-slate-500">{prodotto.supplier_code || "-"}</p>
+                    <p className="truncate text-xs font-black text-slate-900">
+                      {prodotto.nome_prodotto}
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-500">
+                      {prodotto.supplier_code || "-"}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">{quantita[prodotto.id]}</span>
+                    <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">
+                      {quantita[prodotto.id]}
+                    </span>
                     <button
                       type="button"
                       onClick={() => aggiornaQuantita(prodotto.id, "")}
@@ -671,17 +728,28 @@ settimana_key: settimanaKey,
               ))}
 
               {righeLibereSelezionate.map((riga, index) => (
-                <div key={`${riga.nome_prodotto}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2">
+                <div
+                  key={`${riga.nome_prodotto}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-black text-slate-900">{riga.nome_prodotto}</p>
-                    <p className="text-[10px] font-bold text-amber-700">Fuori lista · {riga.misura}</p>
+                    <p className="truncate text-xs font-black text-slate-900">
+                      {riga.nome_prodotto}
+                    </p>
+                    <p className="text-[10px] font-bold text-amber-700">
+                      Fuori lista · {riga.misura}
+                    </p>
                   </div>
-                  <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">{riga.quantita}</span>
+                  <span className="rounded-lg bg-white px-2 py-1 text-sm font-black text-slate-950">
+                    {riga.quantita}
+                  </span>
                 </div>
               ))}
 
               {numeroRigheOrdine === 0 && (
-                <p className="text-sm font-bold text-slate-500">Nessun prodotto selezionato.</p>
+                <p className="text-sm font-bold text-slate-500">
+                  Nessun prodotto selezionato.
+                </p>
               )}
             </div>
           )}
@@ -762,10 +830,7 @@ settimana_key: settimanaKey,
                           value={quantita[prodotto.id] || ""}
                           disabled={!!blocco || isSaving}
                           onChange={(e) =>
-                            aggiornaQuantita(
-                              prodotto.id,
-                              e.target.value
-                            )
+                            aggiornaQuantita(prodotto.id, e.target.value)
                           }
                           className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-right text-sm font-semibold text-slate-900 disabled:bg-slate-200"
                         />
@@ -827,15 +892,19 @@ settimana_key: settimanaKey,
                           >
                             −
                           </button>
+
                           <input
                             type="number"
                             inputMode="decimal"
                             placeholder={String(prodotto.consigliato || 0)}
                             value={quantita[prodotto.id] || ""}
                             disabled={!!blocco || isSaving}
-                            onChange={(e) => aggiornaQuantita(prodotto.id, e.target.value)}
+                            onChange={(e) =>
+                              aggiornaQuantita(prodotto.id, e.target.value)
+                            }
                             className="h-11 w-14 bg-transparent text-center text-lg font-black text-slate-950 outline-none disabled:text-slate-500"
                           />
+
                           <button
                             type="button"
                             onClick={() => cambiaQuantita(prodotto.id, 1)}
@@ -861,103 +930,111 @@ settimana_key: settimanaKey,
           )}
         </section>
 
-      <section className="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm">
-  <h3 className="mb-3 text-lg font-black tracking-tight text-slate-950">
-    Prodotto non presente in lista
-  </h3>
+        <section className="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-lg font-black tracking-tight text-slate-950">
+            Prodotto non presente in lista
+          </h3>
 
-  <div className="space-y-3">
-    {righeLibere.map((riga, index) => (
-      <div
-        key={index}
-        className="grid grid-cols-1 gap-3 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 lg:grid-cols-12"
-      >
-        <input
-          type="text"
-          placeholder="Nome prodotto"
-          value={riga.nome_prodotto}
-          disabled={!!blocco || isSaving}
-          onChange={(e) =>
-            aggiornaLibera(index, "nome_prodotto", e.target.value)
-          }
-          className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-4"
-        />
+          <div className="space-y-3">
+            {righeLibere.map((riga, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-1 gap-3 rounded-2xl border-2 border-slate-200 bg-slate-50 p-3 lg:grid-cols-12"
+              >
+                <input
+                  type="text"
+                  placeholder="Nome prodotto"
+                  value={riga.nome_prodotto}
+                  disabled={!!blocco || isSaving}
+                  onChange={(e) =>
+                    aggiornaLibera(index, "nome_prodotto", e.target.value)
+                  }
+                  className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-4"
+                />
 
-        <input
-          type="text"
-          placeholder="Misure / dimensioni"
-          value={riga.misura}
-          disabled={!!blocco || isSaving}
-          onChange={(e) =>
-            aggiornaLibera(index, "misura", e.target.value)
-          }
-          className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-4"
-        />
+                <input
+                  type="text"
+                  placeholder="Misure / dimensioni"
+                  value={riga.misura}
+                  disabled={!!blocco || isSaving}
+                  onChange={(e) =>
+                    aggiornaLibera(index, "misura", e.target.value)
+                  }
+                  className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-700 lg:col-span-4"
+                />
 
-        <div className="flex h-14 items-center gap-1 rounded-2xl border-2 border-slate-300 bg-white p-1 lg:col-span-2">
+                <div className="flex h-14 items-center gap-1 rounded-2xl border-2 border-slate-300 bg-white p-1 lg:col-span-2">
+                  <button
+                    type="button"
+                    onClick={() => cambiaQuantitaLibera(index, -1)}
+                    disabled={!!blocco || isSaving}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl font-black text-slate-800 disabled:text-slate-300"
+                  >
+                    −
+                  </button>
+
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Qtà"
+                    value={riga.quantita}
+                    disabled={!!blocco || isSaving}
+                    onChange={(e) =>
+                      aggiornaLibera(index, "quantita", e.target.value)
+                    }
+                    className="h-10 min-w-0 flex-1 bg-transparent text-center text-base font-black text-slate-950 outline-none disabled:text-slate-500"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => cambiaQuantitaLibera(index, 1)}
+                    disabled={!!blocco || isSaving}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xl font-black text-white disabled:bg-slate-300"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => rimuoviRigaLibera(index)}
+                  disabled={!!blocco || isSaving}
+                  className="h-14 rounded-2xl border-2 border-red-200 bg-red-50 px-3 text-sm font-black text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
+                >
+                  Rimuovi
+                </button>
+              </div>
+            ))}
+          </div>
+
           <button
-            type="button"
-            onClick={() => cambiaQuantitaLibera(index, -1)}
+            onClick={aggiungiRigaLibera}
             disabled={!!blocco || isSaving}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl font-black text-slate-800 disabled:text-slate-300"
+            className="mt-3 h-14 w-full rounded-2xl bg-slate-950 px-4 text-sm font-black text-white disabled:bg-slate-400"
           >
-            −
+            + Aggiungi prodotto non in lista
           </button>
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Qtà"
-            value={riga.quantita}
-            disabled={!!blocco || isSaving}
-            onChange={(e) => aggiornaLibera(index, "quantita", e.target.value)}
-            className="h-10 min-w-0 flex-1 bg-transparent text-center text-base font-black text-slate-950 outline-none disabled:text-slate-500"
-          />
-          <button
-            type="button"
-            onClick={() => cambiaQuantitaLibera(index, 1)}
-            disabled={!!blocco || isSaving}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xl font-black text-white disabled:bg-slate-300"
-          >
-            +
-          </button>
-        </div>
-
-        <button
-          onClick={() => rimuoviRigaLibera(index)}
-          disabled={!!blocco || isSaving}
-          className="h-14 rounded-2xl border-2 border-red-200 bg-red-50 px-3 text-sm font-black text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
-        >
-          Rimuovi
-        </button>
-      </div>
-    ))}
-  </div>
-
-  <button
-    onClick={aggiungiRigaLibera}
-    disabled={!!blocco || isSaving}
-    className="mt-3 h-14 w-full rounded-2xl bg-slate-950 px-4 text-sm font-black text-white disabled:bg-slate-400"
-  >
-    + Aggiungi prodotto non in lista
-  </button>
-</section>
+        </section>
 
         <button
           onClick={salvaOrdine}
-          disabled={!!blocco || isSaving}
+          disabled={!!blocco || isSaving || loading}
           className="hidden h-12 w-full items-center justify-center rounded-xl bg-blue-700 px-5 text-base font-bold text-white disabled:bg-slate-400 sm:flex"
         >
-          {isSaving ? "Invio ordine..." : `Salva ordine · ${numeroRigheOrdine} prodotti`}
+          {isSaving
+            ? "Invio ordine..."
+            : `Salva ordine · ${numeroRigheOrdine} prodotti`}
         </button>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur sm:hidden">
         <button
           onClick={salvaOrdine}
-          disabled={!!blocco || isSaving}
+          disabled={!!blocco || isSaving || loading}
           className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-700 px-5 text-base font-bold text-white disabled:bg-slate-400"
         >
-          {isSaving ? "Invio ordine..." : `Salva ordine · ${numeroRigheOrdine} prodotti`}
+          {isSaving
+            ? "Invio ordine..."
+            : `Salva ordine · ${numeroRigheOrdine} prodotti`}
         </button>
       </div>
     </main>

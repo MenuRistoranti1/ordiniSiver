@@ -16,41 +16,71 @@ export default function StoricoOrdini() {
   const [ordinamento, setOrdinamento] = useState("data")
 
   useEffect(() => {
-    const localeId = localStorage.getItem("locale_id") || ""
-    const nome = localStorage.getItem("locale_nome") || ""
+    inizializzaPagina()
+  }, [])
 
-    if (!localeId) {
+  async function inizializzaPagina() {
+    setLoading(true)
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/"
+      return
+    }
+
+    if (user.app_metadata?.role !== "locale") {
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    const localeId = String(user.app_metadata?.locale_id || "")
+    const nome = String(user.app_metadata?.locale_nome || "")
+
+    if (!localeId || !nome) {
+      await supabase.auth.signOut()
       window.location.href = "/"
       return
     }
 
     setLocaleNome(nome)
-    caricaOrdini(localeId)
-  }, [])
+    await caricaOrdini(localeId)
+    setLoading(false)
+  }
 
   async function caricaOrdini(localeId: string) {
-    setLoading(true)
-
     const { data, error } = await supabase
       .from("ordini")
       .select("*")
-      .eq("locale_id", String(localeId))
+      .eq("locale_id", localeId)
       .order("created_at", { ascending: false })
 
     if (error) {
       console.log("Errore storico ordini:", error)
       showToast("Errore caricamento storico ordini", "error")
-      setLoading(false)
       return
     }
 
     setOrdini(data || [])
-    setLoading(false)
   }
 
-  function logout() {
-    localStorage.clear()
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
     window.location.href = "/"
+  }
+
+  function totaleGruppo(gruppo: any) {
+    return gruppo.prodotti.reduce(
+      (sum: number, ordine: any) => sum + Number(ordine.quantita || 0),
+      0
+    )
   }
 
   const gruppi = useMemo(() => {
@@ -131,17 +161,9 @@ export default function StoricoOrdini() {
     )
   }, [ordini])
 
-  function totaleGruppo(gruppo: any) {
-    return gruppo.prodotti.reduce(
-      (sum: number, ordine: any) => sum + Number(ordine.quantita || 0),
-      0
-    )
-  }
-
   return (
     <main className="min-h-screen bg-slate-100 px-3 py-4 sm:px-5 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-4">
-
         <LocaleMobileHeader />
 
         <section className="hidden rounded-2xl bg-slate-950 p-4 text-white shadow-lg lg:block">
@@ -152,7 +174,7 @@ export default function StoricoOrdini() {
               </h1>
 
               <p className="mt-0.5 text-xs font-medium text-slate-300">
-                Storico ordini · {localeNome}
+                Storico ordini · {localeNome || "Caricamento..."}
               </p>
             </div>
 
@@ -224,7 +246,6 @@ export default function StoricoOrdini() {
         </section>
 
         <section className="grid gap-3 md:grid-cols-[1fr_240px]">
-
           <input
             type="text"
             placeholder="Cerca prodotto, responsabile, settimana..."
@@ -250,7 +271,6 @@ export default function StoricoOrdini() {
           </section>
         ) : (
           <section className="space-y-3">
-
             {gruppiFiltrati.length === 0 && (
               <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
                 <p className="text-sm font-semibold text-slate-600">
@@ -268,7 +288,6 @@ export default function StoricoOrdini() {
                   className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
                 >
                   <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-
                     <button
                       onClick={() => setGruppoAperto(aperto ? null : gruppo.id)}
                       className="min-w-0 flex-1 text-left"
@@ -297,26 +316,21 @@ export default function StoricoOrdini() {
 
                   {aperto && (
                     <div className="border-t border-slate-100 bg-slate-50/70 p-3 sm:p-4">
-
                       <div className="space-y-3">
-
                         {gruppo.prodotti.map((ordine: any, index: number) => (
                           <div
-                            key={ordine.id}
+                            key={ordine.id || `${gruppo.id}-${index}`}
                             className={`rounded-2xl border border-slate-200 p-4 ${
                               index % 2 === 0 ? "bg-white" : "bg-slate-50"
                             }`}
                           >
                             <div className="flex items-start justify-between gap-3">
-
                               <div className="min-w-0 flex-1">
-
                                 <h4 className="text-base font-black text-slate-950">
                                   {ordine.nome_prodotto}
                                 </h4>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
-
                                   <span className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-black text-blue-700">
                                     Quantità: {ordine.quantita}
                                   </span>
@@ -324,7 +338,6 @@ export default function StoricoOrdini() {
                                   <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
                                     Misure: {ordine.misure || "-"}
                                   </span>
-
                                 </div>
 
                                 <p className="mt-3 text-xs font-semibold text-slate-500">
@@ -334,15 +347,11 @@ export default function StoricoOrdini() {
                                       ).toLocaleString("it-IT")
                                     : "-"}
                                 </p>
-
                               </div>
-
                             </div>
                           </div>
                         ))}
-
                       </div>
-
                     </div>
                   )}
                 </div>

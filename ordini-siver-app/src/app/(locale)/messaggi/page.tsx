@@ -12,22 +12,52 @@ export default function MessaggiLocale() {
   const [localeId, setLocaleId] = useState("")
   const [localeNome, setLocaleNome] = useState("")
   const [menuOpen, setMenuOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
-    const id = localStorage.getItem("locale_id") || ""
-    const nome = localStorage.getItem("locale_nome") || ""
+    inizializzaPagina()
+  }, [])
 
-    if (!id) {
+  async function inizializzaPagina() {
+    setLoading(true)
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/"
+      return
+    }
+
+    if (user.app_metadata?.role !== "locale") {
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    const id = String(user.app_metadata?.locale_id || "")
+    const nome = String(user.app_metadata?.locale_nome || "")
+
+    if (!id || !nome) {
+      await supabase.auth.signOut()
       window.location.href = "/"
       return
     }
 
     setLocaleId(id)
     setLocaleNome(nome)
-    caricaMessaggi(id)
-  }, [])
+
+    await caricaMessaggi(id)
+
+    setLoading(false)
+  }
 
   async function caricaMessaggi(id: string) {
+    if (!id) return
+
     const { data, error } = await supabase
       .from("messages")
       .select("*")
@@ -50,6 +80,15 @@ export default function MessaggiLocale() {
   }
 
   async function inviaMessaggio() {
+    if (sending) return
+
+    if (!localeId || !localeNome) {
+      alert("Sessione locale non valida. Effettua di nuovo il login.")
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
     if (!nomeMittente.trim()) {
       alert("Inserisci il nome di chi scrive")
       return
@@ -59,6 +98,8 @@ export default function MessaggiLocale() {
       alert("Scrivi un messaggio")
       return
     }
+
+    setSending(true)
 
     const { error } = await supabase.from("messages").insert({
       locale_id: localeId,
@@ -72,24 +113,26 @@ export default function MessaggiLocale() {
     if (error) {
       console.log(error)
       alert("Errore invio messaggio")
+      setSending(false)
       return
     }
 
     setTesto("")
-    caricaMessaggi(localeId)
+    await caricaMessaggi(localeId)
+    setSending(false)
   }
 
-  function logout() {
-    localStorage.clear()
+  async function logout() {
+    await supabase.auth.signOut()
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
     window.location.href = "/"
   }
 
   return (
     <main className="min-h-screen bg-slate-100 lg:flex">
-      <button
-        onClick={() => setMenuOpen(true)}
-        className="hidden"
-      >
+      <button onClick={() => setMenuOpen(true)} className="hidden">
         <Menu className="h-6 w-6" />
       </button>
 
@@ -100,9 +143,7 @@ export default function MessaggiLocale() {
         />
       )}
 
-      <aside
-        className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col bg-[#07132b] p-6 text-white lg:flex"
-      >
+      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col bg-[#07132b] p-6 text-white lg:flex">
         <button
           onClick={() => setMenuOpen(false)}
           className="mb-6 flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold lg:hidden"
@@ -118,58 +159,56 @@ export default function MessaggiLocale() {
 
         <nav className="flex-1 space-y-3">
           <button
-            onClick={() => window.location.href = "/dashboard"}
+            onClick={() => (window.location.href = "/dashboard")}
             className="w-full rounded-2xl bg-blue-600 p-4 text-left font-bold"
           >
             Dashboard
           </button>
 
           <button
-            onClick={() => window.location.href = "/giacenze"}
+            onClick={() => (window.location.href = "/giacenze")}
             className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
           >
             Giacenze settimana
           </button>
 
           <button
-            onClick={() => window.location.href = "/nuovo-ordine"}
+            onClick={() => (window.location.href = "/nuovo-ordine")}
             className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
           >
             Nuovo ordine
           </button>
 
           <button
-            onClick={() => window.location.href = "/storico-giacenze"}
+            onClick={() => (window.location.href = "/storico-giacenze")}
             className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
           >
             Storico giacenze
           </button>
 
           <button
-            onClick={() => window.location.href = "/storico-ordini"}
+            onClick={() => (window.location.href = "/storico-ordini")}
             className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
           >
             Storico ordini
           </button>
 
           <button
-            onClick={() => window.location.href = "/messaggi"}
+            onClick={() => (window.location.href = "/messaggi")}
             className="w-full rounded-2xl bg-blue-600 p-4 text-left font-bold"
           >
             Messaggi admin
           </button>
         </nav>
 
-        <button
-          onClick={logout}
-          className="rounded-2xl bg-red-500 p-4 font-bold"
-        >
+        <button onClick={logout} className="rounded-2xl bg-red-500 p-4 font-bold">
           Logout
         </button>
       </aside>
 
       <section className="w-full p-3 pt-4 sm:p-4 lg:ml-72 lg:p-10">
         <LocaleMobileHeader />
+
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-black text-slate-950 sm:text-5xl">
@@ -177,13 +216,14 @@ export default function MessaggiLocale() {
             </h1>
 
             <p className="mt-1 text-sm font-bold text-slate-600 sm:text-xl">
-              Locale: {localeNome}
+              Locale: {localeNome || "Caricamento..."}
             </p>
           </div>
 
           <button
             onClick={() => caricaMessaggi(localeId)}
-            className="h-12 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white"
+            disabled={loading}
+            className="h-12 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white disabled:bg-slate-400"
           >
             Aggiorna
           </button>
@@ -191,7 +231,13 @@ export default function MessaggiLocale() {
 
         <div className="rounded-3xl bg-white p-4 shadow-xl sm:p-6">
           <div className="mb-6 max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-            {messaggi.length === 0 && (
+            {loading && (
+              <p className="text-base font-bold text-slate-500">
+                Caricamento messaggi...
+              </p>
+            )}
+
+            {!loading && messaggi.length === 0 && (
               <p className="text-base font-bold text-slate-500">
                 Nessun messaggio presente.
               </p>
@@ -218,9 +264,7 @@ export default function MessaggiLocale() {
 
                 <p
                   className={`mt-2 text-[10px] font-bold ${
-                    msg.sender === "locale"
-                      ? "text-blue-100"
-                      : "text-slate-500"
+                    msg.sender === "locale" ? "text-blue-100" : "text-slate-500"
                   }`}
                 >
                   {msg.created_at
@@ -236,21 +280,24 @@ export default function MessaggiLocale() {
             placeholder="Nome di chi scrive"
             value={nomeMittente}
             onChange={(e) => setNomeMittente(e.target.value)}
-            className="mb-3 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
+            disabled={sending}
+            className="mb-3 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200"
           />
 
           <textarea
             value={testo}
             onChange={(e) => setTesto(e.target.value)}
             placeholder="Scrivi un messaggio all'admin..."
-            className="mb-3 min-h-[140px] w-full rounded-2xl border-2 border-slate-300 bg-white p-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
+            disabled={sending}
+            className="mb-3 min-h-[140px] w-full rounded-2xl border-2 border-slate-300 bg-white p-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200"
           />
 
           <button
             onClick={inviaMessaggio}
-            className="h-14 w-full rounded-2xl bg-blue-600 text-base font-black text-white"
+            disabled={sending || loading}
+            className="h-14 w-full rounded-2xl bg-blue-600 text-base font-black text-white disabled:bg-slate-400"
           >
-            Invia messaggio
+            {sending ? "Invio in corso..." : "Invia messaggio"}
           </button>
         </div>
       </section>
