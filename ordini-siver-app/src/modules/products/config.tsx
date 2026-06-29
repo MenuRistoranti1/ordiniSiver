@@ -56,16 +56,16 @@ export function getProductsConfig(statistiche: {
           </div>
         ),
       },
-    {
-  key: "category_ref",
-  label: "Categoria",
-  render: (row) => row.category_ref?.name || "-",
-},
-{
-  key: "unit_ref",
-  label: "UM",
-  render: (row) => row.unit_ref?.code || row.unit_ref?.description || "-",
-},
+      {
+        key: "category_ref",
+        label: "Categoria",
+        render: (row) => row.category_ref?.name || "-",
+      },
+      {
+        key: "unit_ref",
+        label: "UM",
+        render: (row) => row.unit_ref?.code || row.unit_ref?.description || "-",
+      },
       {
         key: "price",
         label: "Prezzo",
@@ -107,22 +107,18 @@ export function getProductsConfig(statistiche: {
         label: "Codice interno",
         type: "text",
       },
-    {
-  name: "category_id",
-  label: "Categoria",
-  type: "select",
-  source: "categories",
-  optionLabel: "name",
-  optionValue: "id",
-},
-{
-  name: "unit_id",
-  label: "Unità di misura",
-  type: "select",
-  source: "units",
-  optionLabel: "description",
-  optionValue: "id",
-},
+      {
+        name: "category_id",
+        label: "Categoria",
+        type: "select",
+        source: "categories",
+      },
+      {
+        name: "unit_id",
+        label: "Unità di misura",
+        type: "select",
+        source: "units",
+      },
       {
         name: "price",
         label: "Prezzo",
