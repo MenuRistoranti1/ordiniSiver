@@ -6,10 +6,13 @@ import { supabase } from "@/lib/supabase"
 
 export default function AdminLoginPage() {
   const router = useRouter()
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [errore, setErrore] = useState("")
+  const [messaggio, setMessaggio] = useState("")
   const [caricamento, setCaricamento] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const [verificaSessione, setVerificaSessione] = useState(true)
 
   useEffect(() => {
@@ -42,10 +45,11 @@ export default function AdminLoginPage() {
   async function loginAdmin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setErrore("")
+    setMessaggio("")
     setCaricamento(true)
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     })
 
@@ -69,28 +73,53 @@ export default function AdminLoginPage() {
     router.replace("/admin-dashboard")
   }
 
+  async function inviaResetPassword() {
+    setErrore("")
+    setMessaggio("")
+
+    if (!email.trim()) {
+      setErrore("Inserisci prima la tua email admin.")
+      return
+    }
+
+    setResetLoading(true)
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+
+    if (error) {
+      setErrore(error.message)
+      setResetLoading(false)
+      return
+    }
+
+    setMessaggio("Email di reset inviata. Controlla la posta.")
+    setResetLoading(false)
+  }
+
   if (verificaSessione) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-600">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600">
         Verifica sessione admin...
       </div>
     )
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <h1 className="mb-2 text-2xl font-bold text-slate-900">
           Accesso Admin
         </h1>
 
-        <p className="text-sm text-slate-500 mb-6">
+        <p className="mb-6 text-sm text-slate-500">
           Inserisci le credenziali amministratore.
         </p>
 
         <form onSubmit={loginAdmin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
               Email
             </label>
             <input
@@ -103,7 +132,7 @@ export default function AdminLoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label className="mb-1 block text-sm font-medium text-slate-700">
               Password
             </label>
             <input
@@ -116,17 +145,32 @@ export default function AdminLoginPage() {
           </div>
 
           {errore && (
-            <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {errore}
+            </div>
+          )}
+
+          {messaggio && (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+              {messaggio}
             </div>
           )}
 
           <button
             type="submit"
             disabled={caricamento}
-            className="w-full rounded-xl bg-blue-600 text-white py-3 font-semibold hover:bg-blue-700 disabled:opacity-60"
+            className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {caricamento ? "Accesso in corso..." : "Entra"}
+          </button>
+
+          <button
+            type="button"
+            onClick={inviaResetPassword}
+            disabled={resetLoading}
+            className="w-full text-sm font-bold text-slate-600 underline disabled:opacity-60"
+          >
+            {resetLoading ? "Invio email..." : "Password dimenticata?"}
           </button>
         </form>
       </div>

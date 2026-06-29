@@ -1,16 +1,15 @@
 import type { ReactNode } from "react"
 import AdminRouteGuard from "@/components/AdminRouteGuard"
-import AdminAppHeader from "@/components/AdminAppHeader"
+import AdminV2Shell from "@/components/admin/AdminV2Shell"
 
-export default function ProtectedAdminProdottiLayout({
+export default function AdminLayout({
   children,
 }: {
   children: ReactNode
 }) {
   return (
     <AdminRouteGuard>
-      <AdminAppHeader />
-      {children}
+      <AdminV2Shell>{children}</AdminV2Shell>
     </AdminRouteGuard>
   )
 }

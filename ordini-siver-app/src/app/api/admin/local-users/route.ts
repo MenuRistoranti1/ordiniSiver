@@ -16,9 +16,12 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
+function normalizzaUsername(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "")
+}
+
 function creaEmailInterna(utente: string) {
-  const pulito = utente.trim().toLowerCase().replace(/\s+/g, "")
-  return `${pulito}@local.siver.internal`
+  return `${normalizzaUsername(utente)}@local.siver.internal`
 }
 
 export async function GET() {
@@ -40,7 +43,20 @@ export async function GET() {
     const { data: utenti, error: utentiError } = await supabaseAdmin
       .from("local_users")
       .select(
-        "id, nome, cognome, utente, email_interna, locale_id, locale_nome, active, created_at"
+        `
+        id,
+        nome,
+        cognome,
+        utente,
+        email_interna,
+        locale_id,
+        locale_nome,
+        active,
+        created_at,
+        updated_at,
+        last_login,
+        force_password_change
+      `
       )
       .order("created_at", { ascending: false })
 
@@ -59,9 +75,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Errore caricamento dati",
+          error instanceof Error ? error.message : "Errore caricamento dati",
       },
       { status: 500 }
     )
@@ -75,7 +89,7 @@ export async function POST(req: Request) {
 
     const nome = String(body.nome || "").trim()
     const cognome = String(body.cognome || "").trim()
-    const utente = String(body.utente || "").trim().toLowerCase()
+    const utente = normalizzaUsername(String(body.utente || ""))
     const password = String(body.password || "").trim()
     const localeId = String(body.locale_id || "").trim()
 
@@ -111,7 +125,7 @@ export async function POST(req: Request) {
     const { data: esistente, error: esistenteError } = await supabaseAdmin
       .from("local_users")
       .select("id")
-      .eq("utente", utente)
+      .or(`utente.eq.${utente},email_interna.eq.${emailInterna}`)
       .maybeSingle()
 
     if (esistenteError) {
@@ -123,7 +137,7 @@ export async function POST(req: Request) {
 
     if (esistente) {
       return NextResponse.json(
-        { error: "Questo utente esiste già." },
+        { error: "Questo username esiste già." },
         { status: 400 }
       )
     }
@@ -139,6 +153,7 @@ export async function POST(req: Request) {
           utente,
           locale_id: locale.id,
           locale_nome: locale.name,
+          force_password_change: false,
         },
         app_metadata: {
           role: "locale",
@@ -165,6 +180,8 @@ export async function POST(req: Request) {
         locale_id: locale.id,
         locale_nome: locale.name,
         active: true,
+        force_password_change: false,
+        updated_at: new Date().toISOString(),
       })
 
     if (insertError) {
@@ -181,9 +198,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Errore creazione utente.",
+          error instanceof Error ? error.message : "Errore creazione utente.",
       },
       { status: 500 }
     )
