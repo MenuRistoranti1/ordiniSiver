@@ -5,24 +5,21 @@ function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl) {
-    throw new Error("Manca NEXT_PUBLIC_SUPABASE_URL")
-  }
-
-  if (!serviceRoleKey) {
-    throw new Error("Manca SUPABASE_SERVICE_ROLE_KEY")
-  }
+  if (!supabaseUrl) throw new Error("Manca NEXT_PUBLIC_SUPABASE_URL")
+  if (!serviceRoleKey) throw new Error("Manca SUPABASE_SERVICE_ROLE_KEY")
 
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
 function numero(value: unknown) {
-  if (value === "" || value === null || value === undefined) {
-    return null
-  }
-
+  if (value === "" || value === null || value === undefined) return null
   const n = Number(value)
   return Number.isFinite(n) ? n : null
+}
+
+function uuidOrNull(value: unknown) {
+  const text = String(value || "").trim()
+  return text || null
 }
 
 export async function GET() {
@@ -31,20 +28,19 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("products")
-      .select("*")
+      .select(`
+        *,
+        category_ref:categories(id, name),
+        unit_ref:units(id, code, description)
+      `)
       .is("deleted_at", null)
       .order("name", { ascending: true })
 
     if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      products: data || [],
-    })
+    return NextResponse.json({ products: data || [] })
   } catch (error) {
     return NextResponse.json(
       {
@@ -75,51 +71,40 @@ export async function POST(req: Request) {
     const now = new Date().toISOString()
     const price = numero(body.price)
 
-    const { error } = await supabaseAdmin
-      .from("products")
-      .insert({
-        name,
-        supplier_code:
-          String(body.supplier_code || "").trim() || null,
-        internal_code:
-          String(body.internal_code || "").trim() || null,
-        barcode:
-          String(body.barcode || "").trim() || null,
-        category:
-          String(body.category || "").trim() || null,
-        unit:
-          String(body.unit || "").trim() || null,
-        price,
-        vat: numero(body.vat),
-        min_stock: numero(body.min_stock) ?? 0,
-        max_stock: numero(body.max_stock) ?? 0,
-        required_stock: Boolean(body.required_stock),
-        active: Boolean(body.active),
-        image_url:
-          String(body.image_url || "").trim() || null,
-        notes:
-          String(body.notes || "").trim() || null,
-        last_price_update: price !== null ? now : null,
-        updated_at: now,
-      })
+    const { error } = await supabaseAdmin.from("products").insert({
+      name,
+      supplier_code: String(body.supplier_code || "").trim() || null,
+      internal_code: String(body.internal_code || "").trim() || null,
+      barcode: String(body.barcode || "").trim() || null,
+
+      category_id: uuidOrNull(body.category_id),
+      unit_id: uuidOrNull(body.unit_id),
+
+      category: String(body.category || "").trim() || null,
+      unit: String(body.unit || "").trim() || null,
+
+      price,
+      vat: numero(body.vat),
+      min_stock: numero(body.min_stock) ?? 0,
+      max_stock: numero(body.max_stock) ?? 0,
+      required_stock: Boolean(body.required_stock),
+      active: "active" in body ? Boolean(body.active) : true,
+      image_url: String(body.image_url || "").trim() || null,
+      notes: String(body.notes || "").trim() || null,
+      last_price_update: price !== null ? now : null,
+      updated_at: now,
+    })
 
     if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      ok: true,
-    })
+    return NextResponse.json({ ok: true })
   } catch (error) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Errore creazione prodotto.",
+          error instanceof Error ? error.message : "Errore creazione prodotto.",
       },
       { status: 500 }
     )

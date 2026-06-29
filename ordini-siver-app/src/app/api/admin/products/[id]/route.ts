@@ -25,6 +25,11 @@ function numero(value: unknown) {
   return Number.isFinite(n) ? n : null
 }
 
+function uuidOrNull(value: unknown) {
+  const text = String(value || "").trim()
+  return text || null
+}
+
 export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> }
@@ -52,17 +57,23 @@ export async function PATCH(
     }
 
     if ("supplier_code" in body) {
-      updates.supplier_code =
-        String(body.supplier_code || "").trim() || null
+      updates.supplier_code = String(body.supplier_code || "").trim() || null
     }
 
     if ("internal_code" in body) {
-      updates.internal_code =
-        String(body.internal_code || "").trim() || null
+      updates.internal_code = String(body.internal_code || "").trim() || null
     }
 
     if ("barcode" in body) {
       updates.barcode = String(body.barcode || "").trim() || null
+    }
+
+    if ("category_id" in body) {
+      updates.category_id = uuidOrNull(body.category_id)
+    }
+
+    if ("unit_id" in body) {
+      updates.unit_id = uuidOrNull(body.unit_id)
     }
 
     if ("category" in body) {

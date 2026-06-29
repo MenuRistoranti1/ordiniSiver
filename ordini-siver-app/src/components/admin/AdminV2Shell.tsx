@@ -10,31 +10,54 @@ import {
   LogOut,
   MessageCircle,
   Package,
+  Ruler,
   ShoppingCart,
+  Tags,
   Truck,
   Users,
   Warehouse,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
-const menuItems = [
-  { href: "/admin-dashboard", label: "Dashboard", icon: Home },
-  { href: "/admin-utenti", label: "Utenti", icon: Users },
-  { href: "/admin-prodotti", label: "Prodotti", icon: Package },
-  { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
-  { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
-  { href: "/admin-consegne", label: "Consegne", icon: Truck },
-  { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
-  { href: "/admin-storico-fatture", label: "Storico fatture", icon: ClipboardList },
-  { href: "/admin-messaggi", label: "Messaggi", icon: MessageCircle },
-  { href: "/admin-alert", label: "Alert", icon: Bell },
+const sections = [
+  {
+    title: "Centro controllo",
+    items: [{ href: "/admin-dashboard", label: "Dashboard", icon: Home }],
+  },
+  {
+    title: "Operativo",
+    items: [
+      { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
+      { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
+      { href: "/admin-consegne", label: "Consegne", icon: Truck },
+    ],
+  },
+  {
+    title: "Anagrafiche",
+    items: [
+      { href: "/admin-prodotti", label: "Prodotti", icon: Package },
+      { href: "/admin-categories", label: "Categorie", icon: Tags },
+      { href: "/admin-units", label: "Unità", icon: Ruler },
+      { href: "/admin-utenti", label: "Utenti", icon: Users },
+    ],
+  },
+  {
+    title: "Economia",
+    items: [
+      { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
+      { href: "/admin-storico-fatture", label: "Storico fatture", icon: ClipboardList },
+    ],
+  },
+  {
+    title: "Sistema",
+    items: [
+      { href: "/admin-messaggi", label: "Messaggi", icon: MessageCircle },
+      { href: "/admin-alert", label: "Alert", icon: Bell },
+    ],
+  },
 ]
 
-export default function AdminV2Shell({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -50,32 +73,39 @@ export default function AdminV2Shell({
       <aside className="fixed left-0 top-0 hidden h-screen w-72 flex-col bg-slate-950 text-white lg:flex">
         <div className="border-b border-white/10 p-6">
           <div className="text-2xl font-black tracking-tight">Siver Admin</div>
-          <div className="mt-1 text-sm font-semibold text-slate-400">
-            Gestionale V2
-          </div>
+          <div className="mt-1 text-sm font-semibold text-slate-400">Gestionale V2</div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-          {menuItems.map((item) => {
-            const Icon = item.icon
-            const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`)
+        <nav className="flex-1 space-y-6 overflow-y-auto p-4">
+          {sections.map((section) => (
+            <div key={section.title}>
+              <p className="mb-2 px-4 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                {section.title}
+              </p>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                  active
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-            )
-          })}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon
+                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                        active
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-white/10 p-4">
@@ -89,13 +119,13 @@ export default function AdminV2Shell({
         </div>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className="min-h-screen lg:pl-72">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur lg:hidden">
           <div className="font-black text-slate-950">Siver Admin</div>
           <div className="text-xs font-bold text-slate-500">Gestionale V2</div>
         </header>
 
-        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="w-full p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   )
