@@ -14,11 +14,6 @@ export default function AdminStoricoConsegne() {
   const [locali, setLocali] = useState<any[]>([])
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     caricaDati()
   }, [])
 

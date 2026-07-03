@@ -13,11 +13,6 @@ export default function AdminOrdini() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     caricaDati()
   }, [])
 

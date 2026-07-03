@@ -16,6 +16,15 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
+
+async function verificaAdmin(req: Request, supabaseAdmin: ReturnType<typeof getSupabaseAdmin>) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
 function numero(value: unknown) {
   if (value === "" || value === null || value === undefined) {
     return null
@@ -36,6 +45,11 @@ export async function PATCH(
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const { id } = await context.params
     const body = await req.json()
 
@@ -146,6 +160,11 @@ export async function DELETE(
 ) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const { id } = await context.params
 
     const { error } = await supabaseAdmin

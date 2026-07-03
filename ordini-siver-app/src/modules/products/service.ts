@@ -62,7 +62,7 @@ export const ProductsService = {
     return json
   },
 
-  async update(id: string, payload: ProductPayload) {
+  async update(id: string, payload: Partial<ProductPayload>) {
     const res = await fetch(`/api/admin/products/${id}`, {
       method: "PATCH",
       headers: {

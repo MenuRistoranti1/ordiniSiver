@@ -1,11 +1,21 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { supabase } from "@/lib/supabase"
 import type { Product, ProductForm, ProductStats } from "../types"
+
+async function getAuthHeaders(extra: Record<string, string> = {}) {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+
+  return {
+    ...extra,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
 
 async function leggiJsonSicuro(res: Response) {
   const text = await res.text()
-
   if (!text) return {}
 
   try {
@@ -50,13 +60,11 @@ export function useProducts() {
     try {
       const res = await fetch("/api/admin/products", {
         cache: "no-store",
+        headers: await getAuthHeaders(),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore caricamento prodotti")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore caricamento prodotti")
 
       setProducts(json.products || [])
     } catch (err) {
@@ -74,17 +82,12 @@ export function useProducts() {
     try {
       const res = await fetch("/api/admin/products", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(form),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore creazione prodotto")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore creazione prodotto")
 
       setMessaggio("Prodotto creato correttamente.")
       await caricaProdotti()
@@ -105,17 +108,12 @@ export function useProducts() {
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(form),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore aggiornamento prodotto")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore aggiornamento prodotto")
 
       setMessaggio("Prodotto aggiornato correttamente.")
       await caricaProdotti()
@@ -136,17 +134,12 @@ export function useProducts() {
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ active }),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore aggiornamento stato")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore aggiornamento stato")
 
       setMessaggio(active ? "Prodotto attivato." : "Prodotto disattivato.")
       await caricaProdotti()
@@ -167,13 +160,11 @@ export function useProducts() {
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
         method: "DELETE",
+        headers: await getAuthHeaders(),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore eliminazione prodotto")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore eliminazione prodotto")
 
       setMessaggio("Prodotto eliminato correttamente.")
       await caricaProdotti()
@@ -188,11 +179,7 @@ export function useProducts() {
 
   const categorie = useMemo(() => {
     return Array.from(
-      new Set(
-        products
-          .map((p) => String(p.category || "").trim())
-          .filter(Boolean)
-      )
+      new Set(products.map((p) => String(p.category || "").trim()).filter(Boolean))
     ).sort((a, b) => a.localeCompare(b))
   }, [products])
 
@@ -227,15 +214,11 @@ export function useProducts() {
   }, [products, ricerca, filtroCategoria, filtroStato])
 
   const statistiche: ProductStats = useMemo(() => {
-    const attivi = products.filter((p) => p.active).length
-    const disattivati = products.filter((p) => !p.active).length
-    const categorieCount = categorie.length
-
     return {
       totali: products.length,
-      attivi,
-      disattivati,
-      categorie: categorieCount,
+      attivi: products.filter((p) => p.active).length,
+      disattivati: products.filter((p) => !p.active).length,
+      categorie: categorie.length,
     }
   }, [products, categorie])
 

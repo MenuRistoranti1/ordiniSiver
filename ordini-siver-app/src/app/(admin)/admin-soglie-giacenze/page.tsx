@@ -14,11 +14,6 @@ export default function AdminSoglieGiacenze() {
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     caricaLocali()
   }, [])
 

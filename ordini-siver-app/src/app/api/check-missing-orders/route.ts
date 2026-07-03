@@ -15,6 +15,14 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+
+async function verificaAdmin(req: Request) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+  const { data, error } = await supabase.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
 function getSettimanaKey() {
   const oggi = new Date()
   const giorno = oggi.getDay()
@@ -27,8 +35,12 @@ function getSettimanaKey() {
   return sabato.toISOString().split("T")[0]
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    if (!(await verificaAdmin(req))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const settimanaKey = getSettimanaKey()
 
     const { data: locali, error: localiError } = await supabase

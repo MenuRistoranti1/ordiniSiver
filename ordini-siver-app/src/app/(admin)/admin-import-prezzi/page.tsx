@@ -2,6 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  Database,
+  FileText,
+  Package,
+  RefreshCw,
+  Search,
+  Upload,
+} from "lucide-react"
 
 type CsvRow = Record<string, string>
 
@@ -324,10 +335,18 @@ export default function AdminImportPrezzi() {
       const formData = new FormData()
       formData.append("file", file)
 
-      const res = await fetch("/api/import-invoice-pdf", {
-        method: "POST",
-        body: formData,
-      })
+     const { data } = await supabase.auth.getSession()
+const token = data.session?.access_token
+
+const res = await fetch("/api/import-invoice-pdf", {
+  method: "POST",
+  headers: token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : undefined,
+  body: formData,
+})
 
       const json = await res.json()
 
@@ -510,27 +529,32 @@ export default function AdminImportPrezzi() {
   }, [products, filtro, ricerca, gruppiDuplicati])
 
   return (
-    <main className="min-h-screen bg-slate-100 p-4 sm:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-slate-950 p-5 text-white shadow-xl sm:p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-slate-100">
+      <section className="mx-auto w-full max-w-[1600px] space-y-5 p-3 sm:p-5 lg:p-8">
+        <header className="rounded-3xl bg-slate-950 p-5 text-white shadow-sm sm:p-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h1 className="text-3xl font-black sm:text-5xl">
+              <p className="text-sm font-black uppercase tracking-wide text-blue-300">
+                Area admin
+              </p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">
                 Import prezzi e fatture
               </h1>
-              <p className="mt-2 text-sm font-bold text-slate-300 sm:text-lg">
-                Carica CSV o PDF fattura, aggiorna prezzi, controlla duplicati e archivia prodotti non corretti.
+              <p className="mt-2 max-w-3xl text-sm font-bold text-slate-300 sm:text-base">
+                Importa CSV e PDF, aggiorna i prezzi Siver, controlla duplicati e ripulisci l'anagrafica prodotti.
               </p>
             </div>
 
             <button
-              onClick={() => (window.location.href = "/admin-dashboard")}
-              className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950"
+              onClick={caricaProdotti}
+              disabled={loadingProducts || loading}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white disabled:bg-slate-600"
             >
-              Torna dashboard
+              <RefreshCw className={`h-5 w-5 ${loadingProducts || loading ? "animate-spin" : ""}`} />
+              Aggiorna
             </button>
           </div>
-        </section>
+        </header>
 
         {errore && (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 font-black text-red-700">
@@ -538,39 +562,62 @@ export default function AdminImportPrezzi() {
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-3xl bg-white p-5 shadow">
-            <p className="text-sm font-black uppercase text-slate-500">
-              Prodotti totali
-            </p>
-            <h2 className="mt-2 text-4xl font-black text-slate-950">
-              {products.length}
-            </h2>
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Prodotti totali</p>
+                <h2 className="mt-2 text-4xl font-black text-slate-950">{products.length}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">Anagrafica completa</p>
+              </div>
+              <div className="rounded-2xl bg-blue-100 p-3 text-blue-700"><Package className="h-6 w-6" /></div>
+            </div>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow">
-            <p className="text-sm font-black uppercase text-slate-500">
-              Gruppi duplicati
-            </p>
-            <h2 className="mt-2 text-4xl font-black text-red-600">
-              {gruppiDuplicati.length}
-            </h2>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Duplicati</p>
+                <h2 className="mt-2 text-4xl font-black text-red-600">{gruppiDuplicati.length}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">Gruppi da verificare</p>
+              </div>
+              <div className="rounded-2xl bg-red-100 p-3 text-red-700"><AlertTriangle className="h-6 w-6" /></div>
+            </div>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow">
-            <p className="text-sm font-black uppercase text-slate-500">
-              Archiviati / inattivi
-            </p>
-            <h2 className="mt-2 text-4xl font-black text-amber-600">
-              {products.filter((p) => prodottoArchiviato(p)).length}
-            </h2>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Archiviati</p>
+                <h2 className="mt-2 text-4xl font-black text-amber-600">{products.filter((p) => prodottoArchiviato(p)).length}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">Inattivi / duplicati</p>
+              </div>
+              <div className="rounded-2xl bg-amber-100 p-3 text-amber-700"><Archive className="h-6 w-6" /></div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Attivi</p>
+                <h2 className="mt-2 text-4xl font-black text-emerald-600">{products.filter((p) => !prodottoArchiviato(p)).length}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">Disponibili ai locali</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><CheckCircle2 className="h-6 w-6" /></div>
+            </div>
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-5 shadow sm:p-8">
-          <h2 className="mb-2 text-2xl font-black text-slate-950">
-            Import CSV o PDF fattura
-          </h2>
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-2 flex items-center gap-3">
+            <div className="rounded-2xl bg-blue-100 p-3 text-blue-700"><Upload className="h-6 w-6" /></div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-600">Step 1</p>
+              <h2 className="text-2xl font-black text-slate-950">
+                Import CSV o PDF fattura
+              </h2>
+            </div>
+          </div>
 
           <p className="mb-5 text-sm font-bold text-slate-500">
             CSV: CodiceArticolo / PrezzoUnitario. PDF: fatture Siver con tabella codice, prodotto, quantità e prezzo.
@@ -605,10 +652,16 @@ export default function AdminImportPrezzi() {
         </section>
 
         {pdfPreview.length > 0 && (
-          <section className="rounded-3xl bg-white p-5 shadow sm:p-8">
-            <h2 className="text-2xl font-black text-slate-950">
-              Anteprima fattura importata
-            </h2>
+          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><FileText className="h-6 w-6" /></div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-600">Step 2</p>
+                <h2 className="text-2xl font-black text-slate-950">
+                  Anteprima fattura importata
+                </h2>
+              </div>
+            </div>
 
             {pdfInfo && (
               <p className="mt-1 text-sm font-bold text-slate-500">
@@ -667,16 +720,20 @@ export default function AdminImportPrezzi() {
           </section>
         )}
 
-        <section className="rounded-3xl bg-white p-5 shadow sm:p-8">
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-black text-slate-950">
-                Pulizia prodotti
-              </h2>
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-slate-100 p-3 text-slate-700"><Database className="h-6 w-6" /></div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">Step 3</p>
+                <h2 className="text-2xl font-black text-slate-950">
+                  Pulizia prodotti
+                </h2>
               <p className="mt-1 text-sm font-bold text-slate-500">
                 Archivia duplicati e prodotti vecchi senza eliminarli dal database.
               </p>
             </div>
+          </div>
 
             <button
               onClick={caricaProdotti}
@@ -785,7 +842,7 @@ export default function AdminImportPrezzi() {
             </div>
           </div>
         </section>
-      </div>
+      </section>
     </main>
   )
 }

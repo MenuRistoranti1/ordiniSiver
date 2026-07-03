@@ -16,6 +16,7 @@ export type UtenteLocale = {
   updated_at?: string | null
   last_login?: string | null
   force_password_change?: boolean
+  locali_assegnati?: string[]
 }
 
 export type NuovoUtenteForm = {
@@ -32,6 +33,7 @@ export type ModificaUtenteForm = {
   utente: string
   locale_id: string
   active: boolean
+  locali_assegnati: string[]
 }
 
 export type StatisticheUtenti = {

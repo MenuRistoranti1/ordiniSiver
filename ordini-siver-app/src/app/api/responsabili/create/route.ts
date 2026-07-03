@@ -6,7 +6,19 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+
+async function verificaAdmin(req: Request) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+  const { data, error } = await supabaseAdmin.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
 export async function POST(req: Request) {
+  if (!(await verificaAdmin(req))) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+  }
+
   const body = await req.json()
 
   const { email, password, nome, cognome, locale_id } = body

@@ -1,134 +1,89 @@
-"use client";
+"use client"
 
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { useToast } from "@/components/Toast";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { useEffect, useMemo, useState } from "react"
+import {
+  AlertTriangle,
+  Ban,
+  Bell,
+  CheckCircle,
+  CheckCircle2,
+  FileText,
+  Mail,
+  Package,
+  RefreshCw,
+  Search,
+  ShoppingCart,
+  Store,
+  Tag,
+  Truck,
+  TrendingUp,
+  XCircle,
+} from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
-type RigaFattura = {
-  codice: string;
-  codiceLetto: string;
-  codiceCorretto: boolean;
-  prodotto: string;
-  quantita: number;
-  prezzo?: number;
-  prodottoAnagrafica?: string;
-  productId?: string;
-  prezzoAnagrafica?: number;
-  prezzoVariato?: boolean;
-  variazionePercentuale?: number;
-};
+type AlertItem = {
+  id: string
+  tipo: string
+  gruppo: "operativo" | "fatture" | "anagrafica" | "magazzino" | "consumi"
+  gravita: "alta" | "media" | "bassa"
+  titolo: string
+  descrizione: string
+  locale_nome?: string
+  email?: string
+  settimana_key?: string
+  link?: string
+}
 
-export default function AdminConsegne() {
-  const { showToast } = useToast();
+export default function AdminAlert() {
+  const [locali, setLocali] = useState<any[]>([])
+  const [giacenze, setGiacenze] = useState<any[]>([])
+  const [ordini, setOrdini] = useState<any[]>([])
+  const [ordiniStorici, setOrdiniStorici] = useState<any[]>([])
+  const [alertLog, setAlertLog] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [invoiceImports, setInvoiceImports] = useState<any[]>([])
+  const [invoiceRows, setInvoiceRows] = useState<any[]>([])
 
-  const [locali, setLocali] = useState<any[]>([]);
-  const [localeId, setLocaleId] = useState("");
-  const [ordini, setOrdini] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [ricerca, setRicerca] = useState("");
-
-  const [fileFattura, setFileFattura] = useState<File | null>(null);
-  const [righeFattura, setRigheFattura] = useState<RigaFattura[]>([]);
-  const [localeFattura, setLocaleFattura] = useState<any | null>(null);
-  const [numeroFattura, setNumeroFattura] = useState("");
-  const [dataFattura, setDataFattura] = useState<string | null>(null);
-  const [loadingFattura, setLoadingFattura] = useState(false);
-  const [savingStoricoFattura, setSavingStoricoFattura] = useState(false);
-  const [storicoFatturaId, setStoricoFatturaId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true)
+  const [ricerca, setRicerca] = useState("")
+  const [filtroTipo, setFiltroTipo] = useState("tutti")
+  const [filtroGruppo, setFiltroGruppo] = useState("tutti")
+  const [errore, setErrore] = useState("")
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin";
-      return;
+    inizializzaPagina()
+  }, [])
+
+  async function inizializzaPagina() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
+    if (error || !user) {
+      window.location.href = "/admin"
+      return
     }
 
-    caricaLocali();
-  }, []);
+    if (user.app_metadata?.role !== "admin") {
+      await supabase.auth.signOut()
+      window.location.href = "/admin"
+      return
+    }
+
+    await caricaDati()
+  }
 
   function getSettimanaKey() {
-    const oggi = new Date();
-    const giorno = oggi.getDay();
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1;
-    const sabato = new Date(oggi);
+    const oggi = new Date()
+    const giorno = oggi.getDay()
+    const diff = giorno >= 6 ? giorno - 6 : giorno + 1
+    const sabato = new Date(oggi)
 
-    sabato.setDate(oggi.getDate() - diff);
-    sabato.setHours(0, 0, 0, 0);
+    sabato.setDate(oggi.getDate() - diff)
+    sabato.setHours(0, 0, 0, 0)
 
-    return sabato.toISOString().split("T")[0];
-  }
-
-  async function caricaLocali() {
-    const { data, error } = await supabase
-      .from("restaurants")
-      .select("id, name, invoice_alias")
-      .order("name", { ascending: true });
-
-    if (error) {
-      console.log(error);
-      showToast("Errore caricamento locali", "error");
-      return;
-    }
-
-    setLocali(data || []);
-  }
-
-  async function caricaOrdini(id: string) {
-    setLocaleId(id);
-    setOrdini([]);
-
-    if (!id) return;
-
-    setLoading(true);
-
-    const { data: ordiniDb, error } = await supabase
-      .from("ordini")
-      .select("*")
-      .eq("locale_id", id)
-      .eq("settimana_key", getSettimanaKey())
-      .order("nome_prodotto", { ascending: true });
-
-    if (error) {
-      console.log(error);
-      showToast("Errore caricamento ordini", "error");
-      setLoading(false);
-      return;
-    }
-
-    const { data: prodottiDb } = await supabase
-      .from("products")
-      .select("id, name, supplier_code");
-
-    const ordiniConCodice = (ordiniDb || []).map((ordine: any) => {
-      let supplierCode = ordine.supplier_code || "";
-
-      if (!supplierCode) {
-        const prodotto = (prodottiDb || []).find((p: any) => {
-          const nomeOrdine = normalizza(ordine.nome_prodotto);
-          const nomeProdotto = normalizza(p.name);
-
-          return (
-            nomeOrdine === nomeProdotto ||
-            nomeOrdine.includes(nomeProdotto) ||
-            nomeProdotto.includes(nomeOrdine)
-          );
-        });
-
-        supplierCode = prodotto?.supplier_code || "";
-      }
-
-      return {
-        ...ordine,
-        supplier_code: supplierCode,
-        quantita_consegnata: ordine.quantita_consegnata ?? "",
-        stato_consegna: ordine.stato_consegna || "da_consegnare",
-        nota_consegna: ordine.nota_consegna || "",
-      };
-    });
-
-    setOrdini(ordiniConCodice);
-    setLoading(false);
+    return sabato.toISOString().split("T")[0]
   }
 
   function normalizza(testo: string) {
@@ -138,1068 +93,750 @@ export default function AdminConsegne() {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim()
   }
 
   function normalizzaCodice(codice: string) {
     return String(codice || "")
       .trim()
       .toUpperCase()
-      .replace(/\s+/g, "");
+      .replace(/\s+/g, "")
   }
 
-  function parseNumero(valore: string) {
-    const pulito = String(valore || "")
-      .replace(/\./g, "")
-      .replace(",", ".")
-      .replace(/[^0-9.]/g, "");
-
-    return Number(pulito || 0);
+  function numero(valore: any) {
+    const n = Number(String(valore || "0").replace(",", "."))
+    return Number.isFinite(n) ? n : 0
   }
 
-  function formatPrezzo(prezzo?: number) {
-    if (prezzo === undefined || prezzo === null || Number.isNaN(prezzo))
-      return "-";
-    return `${prezzo.toFixed(3).replace(".", ",")} €`;
-  }
-
-  function arrotondaPrezzo(prezzo?: number) {
-    return Number(Number(prezzo || 0).toFixed(4));
-  }
-
-  function calcolaVariazionePercentuale(prezzoVecchio?: number, prezzoNuovo?: number) {
-    const vecchio = Number(prezzoVecchio || 0);
-    const nuovo = Number(prezzoNuovo || 0);
-
-    if (!vecchio || vecchio <= 0 || !nuovo || nuovo <= 0) return 0;
-
-    return Number((((nuovo - vecchio) / vecchio) * 100).toFixed(2));
-  }
-
-  function prezzoCambiato(prezzoVecchio?: number, prezzoNuovo?: number) {
-    const vecchio = arrotondaPrezzo(prezzoVecchio);
-    const nuovo = arrotondaPrezzo(prezzoNuovo);
-
-    if (!vecchio || !nuovo) return false;
-
-    return vecchio !== nuovo;
-  }
-
-  function codiciCompatibili(codiceOrdine: string, codiceFattura: string) {
-    const ordine = normalizzaCodice(codiceOrdine);
-    const fattura = normalizzaCodice(codiceFattura);
-
-    if (!ordine || !fattura) return false;
-
-    return ordine === fattura;
-  }
-
-  function correggiRigaConAnagrafica(
-    riga: RigaFattura,
-    prodottiDb: any[],
-  ): RigaFattura {
-    const codiceLetto = normalizzaCodice(riga.codice);
-
-    if (!codiceLetto) return riga;
-
-    const prodottiValidi = (prodottiDb || []).filter((p: any) =>
-      normalizzaCodice(p.supplier_code),
-    );
-
-    const esatto = prodottiValidi.find(
-      (p: any) => normalizzaCodice(p.supplier_code) === codiceLetto,
-    );
-
-    if (esatto) {
-      return {
-        ...riga,
-        codice: esatto.supplier_code,
-        codiceLetto: riga.codiceLetto || riga.codice,
-        codiceCorretto: false,
-        prodottoAnagrafica: esatto.name,
-        productId: esatto.id,
-        prezzoAnagrafica: Number(esatto.price || 0),
-        prezzoVariato: prezzoCambiato(Number(esatto.price || 0), riga.prezzo),
-        variazionePercentuale: calcolaVariazionePercentuale(
-          Number(esatto.price || 0),
-          riga.prezzo,
-        ),
-      };
-    }
-
-    const candidati = prodottiValidi.filter((p: any) => {
-      const codiceAnagrafica = normalizzaCodice(p.supplier_code);
-      return codiceAnagrafica.endsWith(codiceLetto);
-    });
-
-    if (candidati.length === 1) {
-      return {
-        ...riga,
-        codice: candidati[0].supplier_code,
-        codiceLetto: riga.codiceLetto || riga.codice,
-        codiceCorretto: true,
-        prodottoAnagrafica: candidati[0].name,
-        productId: candidati[0].id,
-        prezzoAnagrafica: Number(candidati[0].price || 0),
-        prezzoVariato: prezzoCambiato(Number(candidati[0].price || 0), riga.prezzo),
-        variazionePercentuale: calcolaVariazionePercentuale(
-          Number(candidati[0].price || 0),
-          riga.prezzo,
-        ),
-      };
-    }
-
-    return {
-      ...riga,
-      codiceLetto: riga.codiceLetto || riga.codice,
-      codiceCorretto: false,
-    };
-  }
-
-  function trovaLocaleDaFattura(testo: string) {
-    const testoNorm = normalizza(testo);
-
-    return (
-      locali.find((locale) => {
-        const alias = normalizza(locale.invoice_alias || "");
-        const nome = normalizza(locale.name || "");
-
-        if (alias && testoNorm.includes(alias)) return true;
-        if (nome && testoNorm.includes(nome)) return true;
-
-        return false;
-      }) || null
-    );
-  }
-
-  function estraiNumeroFattura(testo: string) {
-    const matchAccompagnatoria = testo.match(
-      /Fattura\s+Accompagnatoria\s+N[°º]?\s+([0-9]+\/[0-9A-Z]+)/i,
-    );
-
-    if (matchAccompagnatoria?.[1]) return matchAccompagnatoria[1];
-
-    const matchElettronica = testo.match(
-      /TD01\s+fattura\s+([0-9]+\/[0-9A-Z]+)\s+\d{2}[-/]\d{2}[-/]\d{4}/i,
-    );
-
-    return matchElettronica?.[1] || "";
-  }
-
-  function estraiDataFattura(testo: string) {
-    const matchElettronica = testo.match(
-      /TD01\s+fattura\s+[0-9]+\/[0-9A-Z]+\s+(\d{2})[-/](\d{2})[-/](\d{4})/i,
-    );
-
-    if (matchElettronica?.[1] && matchElettronica?.[2] && matchElettronica?.[3]) {
-      return `${matchElettronica[3]}-${matchElettronica[2]}-${matchElettronica[1]}`;
-    }
-
-    const matchAccompagnatoria = testo.match(
-      /Fattura\s+Accompagnatoria\s+N[°º]?\s+[0-9]+\/[0-9A-Z]+\s+Data\s+(\d{2})[-/](\d{2})[-/](\d{4})/i,
-    );
-
-    if (
-      matchAccompagnatoria?.[1] &&
-      matchAccompagnatoria?.[2] &&
-      matchAccompagnatoria?.[3]
-    ) {
-      return `${matchAccompagnatoria[3]}-${matchAccompagnatoria[2]}-${matchAccompagnatoria[1]}`;
-    }
-
-    return null;
-  }
-
-  function calcolaTotaleRighe(righe: RigaFattura[]) {
-    return righe.reduce(
-      (sum, riga) => sum + Number(riga.quantita || 0) * Number(riga.prezzo || 0),
-      0,
-    );
-  }
-
-  function descriviAnomalia(riga: RigaFattura, ordineMatch: any | null) {
-    const note: string[] = [];
-
-    if (!ordineMatch) {
-      note.push("Nessun ordine abbinato");
-    }
-
-    if (riga.codiceCorretto) {
-      note.push(`Codice corretto da ${riga.codiceLetto} a ${riga.codice}`);
-    }
-
-    if (ordineMatch) {
-      const ordinata = Number(ordineMatch.quantita || 0);
-      const consegnata = Number(riga.quantita || 0);
-
-      if (ordinata > 0 && consegnata !== ordinata) {
-        note.push(`Quantità diversa: ordinata ${ordinata}, fattura ${consegnata}`);
-      }
-    }
-
-    if (riga.prezzoVariato) {
-      const variazione = Number(riga.variazionePercentuale || 0);
-      const segno = variazione > 0 ? "+" : "";
-      note.push(
-        `Prezzo variato: listino ${formatPrezzo(
-          riga.prezzoAnagrafica,
-        )}, fattura ${formatPrezzo(riga.prezzo)} (${segno}${variazione.toFixed(
-          2,
-        )}%)`,
-      );
-    }
-
-    return note.join(" · ");
-  }
-
-  async function salvaStoricoPrezzi(righe: RigaFattura[]) {
-    const righeConPrezzoVariato = righe.filter(
-      (riga) =>
-        riga.productId &&
-        riga.codice &&
-        riga.prezzo &&
-        riga.prezzo > 0 &&
-        riga.prezzoAnagrafica &&
-        riga.prezzoAnagrafica > 0 &&
-        prezzoCambiato(riga.prezzoAnagrafica, riga.prezzo),
-    );
-
-    if (righeConPrezzoVariato.length === 0) return 0;
-
-    const records: any[] = [];
-
-    for (const riga of righeConPrezzoVariato) {
-      const { data: giaPresente } = await supabase
-        .from("product_price_history")
-        .select("id")
-        .eq("supplier_code", riga.codice)
-        .eq("invoice_number", numeroFattura || "Senza numero")
-        .eq("new_price", Number(riga.prezzo || 0))
-        .limit(1);
-
-      if (giaPresente && giaPresente.length > 0) continue;
-
-      records.push({
-        product_id: riga.productId || null,
-        supplier_code: riga.codice,
-        product_name: riga.prodottoAnagrafica || riga.prodotto,
-        supplier: "Siver",
-        invoice_number: numeroFattura || "Senza numero",
-        invoice_date: dataFattura,
-        old_price: Number(riga.prezzoAnagrafica || 0),
-        new_price: Number(riga.prezzo || 0),
-        variation_percent: Number(riga.variazionePercentuale || 0),
-        source: "invoice",
-      });
-    }
-
-    if (records.length === 0) return 0;
-
-    const { error } = await supabase
-      .from("product_price_history")
-      .insert(records);
-
-    if (error) throw error;
-
-    return records.length;
-  }
-
-  async function salvaStoricoFattura(
-    righe: RigaFattura[],
-    ordiniAggiornati: any[],
-  ) {
-    if (storicoFatturaId) return storicoFatturaId;
-
-    const numero = numeroFattura || "Senza numero";
-    const totale = calcolaTotaleRighe(righe);
-
-    const { data: importData, error: importError } = await supabase
-      .from("invoice_imports")
-      .insert({
-        supplier: "Siver",
-        invoice_number: numero,
-        invoice_date: dataFattura,
-        restaurant_id: localeFattura?.id || localeId || null,
-        restaurant_name: localeFattura?.name || null,
-        total: Number(totale.toFixed(2)),
-        pdf_name: fileFattura?.name || null,
-        pdf_url: null,
-        imported_by: localStorage.getItem("admin_email") || "admin",
-        rows_count: righe.length,
-        notes: "Importata da pagina consegne",
-      })
-      .select("id")
-      .single();
-
-    if (importError) throw importError;
-
-    const invoiceImportId = importData.id;
-
-    const rows = righe.map((riga) => {
-      const ordineMatch =
-        ordiniAggiornati.find((ordine) =>
-          codiciCompatibili(ordine.supplier_code || "", riga.codice || ""),
-        ) || null;
-
-      const anomalyNote = descriviAnomalia(riga, ordineMatch);
-
-      return {
-        invoice_import_id: invoiceImportId,
-        supplier_code: riga.codice,
-        product_name: riga.prodottoAnagrafica || riga.prodotto,
-        quantity: Number(riga.quantita || 0),
-        unit_price: Number(riga.prezzo || 0),
-        total_price: Number(
-          (Number(riga.quantita || 0) * Number(riga.prezzo || 0)).toFixed(2),
-        ),
-        matched_order_id: ordineMatch?.id || null,
-        matched: Boolean(ordineMatch),
-        anomaly: Boolean(anomalyNote),
-        anomaly_note: anomalyNote || null,
-      };
-    });
-
-    const { error: rowsError } = await supabase
-      .from("invoice_import_rows")
-      .insert(rows);
-
-    if (rowsError) throw rowsError;
-
-    setStoricoFatturaId(invoiceImportId);
-    return invoiceImportId;
-  }
-
-  function estraiRigheFattura(testo: string): RigaFattura[] {
-    const risultati: RigaFattura[] = [];
-
-    const testoUnico = testo
-      .replace(/\(CODICE\)/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    const blocchi = testoUnico
-      .split(/(?=\d{2,4}-\d{4,6}\s+)/g)
-      .map((riga) => riga.trim())
-      .filter(Boolean);
-
-    for (const blocco of blocchi) {
-      const match = blocco.match(
-        /^(\d{2,4}-\d{4,6})\s+(.+?)\s+(\d+(?:[,.]\d+)?)\s+(\d+(?:[,.]\d+)?)\s*(?:€\s*)?(?:-?\d+(?:[,.]\d+)?%\s+)?(?:\d{1,2}[,.]\d{2}\s+)?\d+(?:[,.]\d+)?(?:\s|€|$)/i,
-      );
-
-      if (!match) continue;
-
-      const codice = match[1];
-      const prodotto = match[2].trim();
-      const quantita = parseNumero(match[3]);
-      const prezzo = parseNumero(match[4]);
-
-      if (!codice || !prodotto || !quantita || quantita <= 0) continue;
-
-      risultati.push({
-        codice,
-        codiceLetto: codice,
-        codiceCorretto: false,
-        prodotto,
-        quantita,
-        prezzo,
-      });
-    }
-
-    return risultati;
-  }
-
-  async function leggiFatturaPdf() {
-    if (!fileFattura) {
-      showToast("Seleziona prima una fattura PDF", "warning");
-      return;
-    }
-
-    setLoadingFattura(true);
-    setRigheFattura([]);
-    setLocaleFattura(null);
-    setNumeroFattura("");
-    setDataFattura(null);
-    setStoricoFatturaId(null);
+  async function caricaDati() {
+    setLoading(true)
+    setErrore("")
+
+    const settimanaKey = getSettimanaKey()
 
     try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-        import.meta.url,
-      ).toString();
+      const [
+        localiRes,
+        giacenzeRes,
+        ordiniRes,
+        ordiniStoriciRes,
+        alertRes,
+        productsRes,
+        invoicesRes,
+        invoiceRowsRes,
+      ] = await Promise.all([
+        supabase.from("restaurants").select("id, name, email").order("name"),
+        supabase
+          .from("giacenze_settimana")
+          .select("*")
+          .eq("settimana_key", settimanaKey),
+        supabase.from("ordini").select("*").eq("settimana_key", settimanaKey),
+        supabase
+          .from("ordini")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("alert_log")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("products")
+          .select("id, name, supplier_code, price, active")
+          .order("name"),
+        supabase
+          .from("invoice_imports")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("invoice_import_rows")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(500),
+      ])
 
-      const arrayBuffer = await fileFattura.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      if (localiRes.error) throw localiRes.error
+      if (giacenzeRes.error) throw giacenzeRes.error
+      if (ordiniRes.error) throw ordiniRes.error
+      if (ordiniStoriciRes.error) throw ordiniStoriciRes.error
+      if (alertRes.error) throw alertRes.error
+      if (productsRes.error) throw productsRes.error
+      if (invoicesRes.error) throw invoicesRes.error
+      if (invoiceRowsRes.error) throw invoiceRowsRes.error
 
-      let testoCompleto = "";
-
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-        const page = await pdf.getPage(pageNumber);
-        const content = await page.getTextContent();
-
-        const testoPagina = content.items
-          .map((item: any) => item.str)
-          .join(" ");
-
-        testoCompleto += "\n" + testoPagina;
-      }
-
-      console.log("TESTO PDF LETTO:", testoCompleto);
-
-      const locale = trovaLocaleDaFattura(testoCompleto);
-      const numero = estraiNumeroFattura(testoCompleto);
-      const dataFatturaLetta = estraiDataFattura(testoCompleto);
-
-      const { data: prodottiDb, error: prodottiError } = await supabase
-        .from("products")
-        .select("id, name, supplier_code, price");
-
-      if (prodottiError) {
-        console.log(prodottiError);
-        showToast("Errore caricamento anagrafica prodotti", "error");
-        setLoadingFattura(false);
-        return;
-      }
-
-      const righe = estraiRigheFattura(testoCompleto).map((riga) =>
-        correggiRigaConAnagrafica(riga, prodottiDb || []),
-      );
-
-      console.log("NUMERO FATTURA:", numero);
-      console.log("RIGHE FATTURA TROVATE:", righe);
-
-      setLocaleFattura(locale);
-      setNumeroFattura(numero);
-      setDataFattura(dataFatturaLetta);
-      setRigheFattura(righe);
-
-      if (locale) {
-        await caricaOrdini(locale.id);
-        showToast(`Locale riconosciuto: ${locale.name}`, "success");
-      } else {
-        showToast("Locale non riconosciuto", "warning");
-      }
-
-      if (righe.length > 0) {
-        showToast(`Trovate ${righe.length} righe prodotto`, "success");
-      } else {
-        showToast("Nessuna riga prodotto trovata nella fattura", "warning");
-      }
-    } catch (error) {
-      console.log(error);
-      showToast("Errore lettura PDF fattura", "error");
+      setLocali(localiRes.data || [])
+      setGiacenze(giacenzeRes.data || [])
+      setOrdini(ordiniRes.data || [])
+      setOrdiniStorici(ordiniStoriciRes.data || [])
+      setAlertLog(alertRes.data || [])
+      setProducts(productsRes.data || [])
+      setInvoiceImports(invoicesRes.data || [])
+      setInvoiceRows(invoiceRowsRes.data || [])
+    } catch (error: any) {
+      console.log(error)
+      setErrore(error?.message || "Errore caricamento alert")
     }
 
-    setLoadingFattura(false);
+    setLoading(false)
   }
 
-  function trovaOrdinePerRiga(riga: RigaFattura) {
-    return ordini.find((ordine) =>
-      codiciCompatibili(ordine.supplier_code || "", riga.codice || ""),
-    );
-  }
 
-  async function applicaFatturaAgliOrdini() {
-    if (!localeFattura) {
-      showToast("Locale fattura non riconosciuto", "warning");
-      return;
-    }
+  const invoicesById = useMemo(() => {
+    const map = new Map<string, any>()
+    invoiceImports.forEach((invoice) => map.set(String(invoice.id), invoice))
+    return map
+  }, [invoiceImports])
 
-    if (righeFattura.length === 0) {
-      showToast("Nessuna riga fattura da applicare", "warning");
-      return;
-    }
+  const prodottiByCode = useMemo(() => {
+    const map = new Map<string, any>()
+    products.forEach((p) => {
+      const codice = normalizzaCodice(p.supplier_code || "")
+      if (codice) map.set(codice, p)
+    })
+    return map
+  }, [products])
 
-    if (savingStoricoFattura) return;
+  const ordiniById = useMemo(() => {
+    const map = new Map<string, any>()
+    ordiniStorici.forEach((ordine) => map.set(String(ordine.id), ordine))
+    return map
+  }, [ordiniStorici])
 
-    setSavingStoricoFattura(true);
+  const alertCorrenti = useMemo(() => {
+    const settimanaKey = getSettimanaKey()
+    const lista: AlertItem[] = []
 
-    try {
-      const nuovi = [...ordini];
-      let applicati = 0;
-      let nonAbbinati = 0;
-      let anomalie = 0;
+    locali.forEach((locale) => {
+      const haGiacenza = giacenze.some(
+        (g) => String(g.locale_id) === String(locale.id)
+      )
+      const haOrdine = ordini.some(
+        (o) => String(o.locale_id) === String(locale.id)
+      )
 
-      righeFattura.forEach((riga) => {
-        const index = nuovi.findIndex((ordine) =>
-          codiciCompatibili(ordine.supplier_code || "", riga.codice || ""),
-        );
-
-        if (index === -1) {
-          nonAbbinati++;
-          anomalie++;
-          return;
-        }
-
-        const ordinata = Number(nuovi[index].quantita || 0);
-        const consegnata = Number(riga.quantita || 0);
-
-        if (ordinata > 0 && consegnata !== ordinata) {
-          anomalie++;
-        }
-
-        if (riga.codiceCorretto) {
-          anomalie++;
-        }
-
-        nuovi[index].quantita_consegnata = consegnata;
-        nuovi[index].nota_consegna = numeroFattura
-          ? `Fattura ${numeroFattura} · Codice ${riga.codice} · Prezzo ${formatPrezzo(riga.prezzo)}`
-          : `Da fattura PDF · Codice ${riga.codice} · Prezzo ${formatPrezzo(riga.prezzo)}`;
-
-        if (consegnata <= 0) {
-          nuovi[index].stato_consegna = "da_consegnare";
-        } else if (consegnata < ordinata) {
-          nuovi[index].stato_consegna = "parziale";
-        } else {
-          nuovi[index].stato_consegna = "consegnato";
-        }
-
-        applicati++;
-      });
-
-      await salvaStoricoFattura(righeFattura, nuovi);
-      const prezziSalvati = await salvaStoricoPrezzi(righeFattura);
-      setOrdini(nuovi);
-
-      if (applicati === 0) {
-        showToast(
-          `Storico salvato. Nessun prodotto fattura combacia con gli ordini. Prezzi storicizzati: ${prezziSalvati}`,
-          "warning",
-        );
-      } else if (nonAbbinati > 0 || anomalie > 0) {
-        showToast(
-          `Storico salvato. ${applicati} righe applicate, ${nonAbbinati} non abbinate, ${anomalie} anomalie, ${prezziSalvati} prezzi storicizzati`,
-          "warning",
-        );
-      } else {
-        showToast(
-          `Storico salvato. ${applicati} righe applicate agli ordini. Prezzi storicizzati: ${prezziSalvati}`,
-          "success",
-        );
-      }
-    } catch (error) {
-      console.log(error);
-      showToast("Errore salvataggio storico fattura", "error");
-    }
-
-    setSavingStoricoFattura(false);
-  }
-
-  function aggiornaConsegna(index: number, valore: string) {
-    const nuovi = [...ordini];
-    const consegnata = Number(valore || 0);
-    const ordinata = Number(nuovi[index].quantita || 0);
-
-    nuovi[index].quantita_consegnata = valore;
-
-    if (consegnata <= 0) {
-      nuovi[index].stato_consegna = "da_consegnare";
-    } else if (consegnata < ordinata) {
-      nuovi[index].stato_consegna = "parziale";
-    } else {
-      nuovi[index].stato_consegna = "consegnato";
-    }
-
-    setOrdini(nuovi);
-  }
-
-  function aggiornaNota(index: number, valore: string) {
-    const nuovi = [...ordini];
-    nuovi[index].nota_consegna = valore;
-    setOrdini(nuovi);
-  }
-
-  async function salvaConsegne() {
-    if (isSaving) return;
-
-    if (!localeId) {
-      showToast("Seleziona prima un locale", "warning");
-      return;
-    }
-
-    setIsSaving(true);
-
-    for (const ordine of ordini) {
-      const consegnata = Number(ordine.quantita_consegnata || 0);
-      const ordinata = Number(ordine.quantita || 0);
-
-      if (isNaN(consegnata) || consegnata < 0) {
-        showToast("Controlla le quantità consegnate", "warning");
-        setIsSaving(false);
-        return;
-      }
-
-      let stato = "da_consegnare";
-
-      if (consegnata <= 0) {
-        stato = "da_consegnare";
-      } else if (consegnata < ordinata) {
-        stato = "parziale";
-      } else {
-        stato = "consegnato";
-      }
-
-      const { error } = await supabase
-        .from("ordini")
-        .update({
-          quantita_consegnata: consegnata,
-          stato_consegna: stato,
-          nota_consegna: ordine.nota_consegna || null,
+      if (!haGiacenza) {
+        lista.push({
+          id: `giacenza-${locale.id}`,
+          tipo: "giacenza",
+          gruppo: "operativo",
+          gravita: "alta",
+          titolo: "Giacenza mancante",
+          descrizione: `${locale.name} non ha inserito le giacenze della settimana.`,
+          locale_nome: locale.name,
+          email: locale.email,
+          settimana_key: settimanaKey,
         })
-        .eq("id", ordine.id);
-
-      if (error) {
-        console.log(error);
-        showToast("Errore salvataggio consegne", "error");
-        setIsSaving(false);
-        return;
       }
+
+      if (!haOrdine) {
+        lista.push({
+          id: `ordine-${locale.id}`,
+          tipo: "ordine",
+          gruppo: "operativo",
+          gravita: "media",
+          titolo: "Ordine mancante",
+          descrizione: `${locale.name} non ha inviato l'ordine della settimana.`,
+          locale_nome: locale.name,
+          email: locale.email,
+          settimana_key: settimanaKey,
+        })
+      }
+
+      const storicoLocale = ordiniStorici.filter(
+        (o) => String(o.locale_id) === String(locale.id)
+      )
+
+      if (storicoLocale.length === 0) {
+        lista.push({
+          id: `inattivo-${locale.id}`,
+          tipo: "inattivo",
+          gruppo: "operativo",
+          gravita: "media",
+          titolo: "Locale inattivo",
+          descrizione: `${locale.name} non ha storico ordini registrato.`,
+          locale_nome: locale.name,
+          email: locale.email,
+          settimana_key: settimanaKey,
+        })
+      }
+    })
+
+    ordini.forEach((ordine) => {
+      const ordinata = Number(ordine.quantita || 0)
+      const consegnata = Number(ordine.quantita_consegnata || 0)
+      const stato = ordine.stato_consegna || "da_consegnare"
+
+      if (!normalizzaCodice(ordine.supplier_code || "")) {
+        lista.push({
+          id: `ordine-senza-codice-${ordine.id}`,
+          tipo: "ordine_senza_codice",
+          gruppo: "anagrafica",
+          gravita: "alta",
+          titolo: "Ordine senza codice prodotto",
+          descrizione: `${ordine.locale_nome || "Locale"} · ${
+            ordine.nome_prodotto || "Prodotto"
+          } non ha supplier_code salvato.`,
+          locale_nome: ordine.locale_nome,
+          settimana_key: ordine.settimana_key,
+        })
+      }
+
+      if (stato === "parziale" || (consegnata > 0 && consegnata < ordinata)) {
+        lista.push({
+          id: `parziale-${ordine.id}`,
+          tipo: "consegna",
+          gruppo: "operativo",
+          gravita: "media",
+          titolo: "Consegna parziale",
+          descrizione: `${ordine.locale_nome} · ${ordine.nome_prodotto}: consegnati ${consegnata} su ${ordinata}.`,
+          locale_nome: ordine.locale_nome,
+          settimana_key: ordine.settimana_key,
+        })
+      }
+
+      if (stato === "da_consegnare" && ordinata > 0) {
+        lista.push({
+          id: `inevasa-${ordine.id}`,
+          tipo: "consegna",
+          gruppo: "operativo",
+          gravita: "alta",
+          titolo: "Consegna non evasa",
+          descrizione: `${ordine.locale_nome} · ${ordine.nome_prodotto}: ancora da consegnare.`,
+          locale_nome: ordine.locale_nome,
+          settimana_key: ordine.settimana_key,
+        })
+      }
+    })
+
+    ordini.forEach((ordine) => {
+      const storicoProdotto = ordiniStorici
+        .filter(
+          (o) =>
+            String(o.locale_id) === String(ordine.locale_id) &&
+            normalizza(o.nome_prodotto || "") ===
+              normalizza(ordine.nome_prodotto || "") &&
+            String(o.settimana_key) !== String(ordine.settimana_key)
+        )
+        .slice(0, 4)
+
+      if (storicoProdotto.length < 2) return
+
+      const media =
+        storicoProdotto.reduce(
+          (sum, item) => sum + Number(item.quantita || 0),
+          0
+        ) / storicoProdotto.length
+
+      const quantitaAttuale = Number(ordine.quantita || 0)
+
+      if (media > 0 && quantitaAttuale >= media * 2) {
+        const aumento = Math.round(((quantitaAttuale - media) / media) * 100)
+        lista.push({
+          id: `anomalo-${ordine.id}`,
+          tipo: "anomalia",
+          gruppo: "consumi",
+          gravita: "alta",
+          titolo: "Consumo anomalo",
+          descrizione: `${ordine.locale_nome} · ${ordine.nome_prodotto}: ordine ${quantitaAttuale}, media ${Math.round(
+            media
+          )}. Aumento +${aumento}%.`,
+          locale_nome: ordine.locale_nome,
+          settimana_key: ordine.settimana_key,
+        })
+      }
+    })
+
+    const prodottiInevasi: Record<string, any> = {}
+    ordiniStorici.forEach((ordine) => {
+      const ordinata = Number(ordine.quantita || 0)
+      const consegnata = Number(ordine.quantita_consegnata || 0)
+      const inevasa = Math.max(ordinata - consegnata, 0)
+      if (inevasa <= 0) return
+
+      const chiave = `${ordine.locale_nome}-${ordine.nome_prodotto}`
+      if (!prodottiInevasi[chiave]) {
+        prodottiInevasi[chiave] = {
+          locale_nome: ordine.locale_nome,
+          nome_prodotto: ordine.nome_prodotto,
+          count: 0,
+          totale_inevaso: 0,
+        }
+      }
+      prodottiInevasi[chiave].count += 1
+      prodottiInevasi[chiave].totale_inevaso += inevasa
+    })
+
+    Object.values(prodottiInevasi).forEach((item: any) => {
+      if (item.count >= 3) {
+        lista.push({
+          id: `sempre-inevaso-${item.locale_nome}-${item.nome_prodotto}`,
+          tipo: "inevaso",
+          gruppo: "operativo",
+          gravita: "alta",
+          titolo: "Prodotto spesso inevaso",
+          descrizione: `${item.locale_nome} · ${item.nome_prodotto}: inevaso ${item.count} volte, totale mancante ${item.totale_inevaso}.`,
+          locale_nome: item.locale_nome,
+          settimana_key: settimanaKey,
+        })
+      }
+    })
+
+    giacenze.forEach((g) => {
+      const quantita = Number(g.quantita || 0)
+      if (quantita <= 0) {
+        lista.push({
+          id: `sotto-soglia-${g.id}`,
+          tipo: "soglia",
+          gruppo: "magazzino",
+          gravita: "alta",
+          titolo: "Prodotto a zero",
+          descrizione: `${g.locale_nome || "Locale"} · ${
+            g.nome_prodotto
+          }: giacenza ${quantita}.`,
+          locale_nome: g.locale_nome || "",
+          settimana_key: settimanaKey,
+        })
+      }
+    })
+
+    products.forEach((prodotto) => {
+      if (prodotto.active === false) return
+      const codice = normalizzaCodice(prodotto.supplier_code || "")
+      const prezzo = numero(prodotto.price)
+
+      if (!codice) {
+        lista.push({
+          id: `prodotto-senza-codice-${prodotto.id}`,
+          tipo: "prodotto_senza_codice",
+          gruppo: "anagrafica",
+          gravita: "alta",
+          titolo: "Prodotto senza codice",
+          descrizione: `${prodotto.name || "Prodotto"} non ha supplier_code.`,
+          settimana_key: settimanaKey,
+        })
+      }
+
+      if (prezzo <= 0) {
+        lista.push({
+          id: `prodotto-senza-prezzo-${prodotto.id}`,
+          tipo: "prodotto_senza_prezzo",
+          gruppo: "anagrafica",
+          gravita: "media",
+          titolo: "Prodotto senza prezzo",
+          descrizione: `${prodotto.name || "Prodotto"} ha prezzo nullo o mancante.`,
+          settimana_key: settimanaKey,
+        })
+      }
+    })
+
+    invoiceRows.forEach((riga) => {
+      const invoice = invoicesById.get(String(riga.invoice_import_id))
+      const numeroFattura = invoice?.invoice_number || "senza numero"
+      const locale = invoice?.restaurant_name || "Locale"
+      const codice = normalizzaCodice(riga.supplier_code || "")
+      const prodottoAnagrafica = codice ? prodottiByCode.get(codice) : null
+
+      if (riga.anomaly) {
+        lista.push({
+          id: `fattura-anomalia-${riga.id}`,
+          tipo: "fattura_anomalia",
+          gruppo: "fatture",
+          gravita: "alta",
+          titolo: "Anomalia fattura",
+          descrizione: `Fattura ${numeroFattura} · ${locale} · ${
+            riga.product_name || "Prodotto"
+          }: ${riga.anomaly_note || "anomalia da controllare"}.`,
+          locale_nome: locale,
+          link: "/admin-storico-fatture",
+        })
+      }
+
+      if (!riga.matched) {
+        lista.push({
+          id: `fattura-no-match-${riga.id}`,
+          tipo: "fattura_no_match",
+          gruppo: "fatture",
+          gravita: "alta",
+          titolo: "Riga fattura non abbinata",
+          descrizione: `Fattura ${numeroFattura} · ${locale} · ${
+            riga.supplier_code || "-"
+          } ${riga.product_name || "Prodotto"} non è collegata a un ordine.`,
+          locale_nome: locale,
+          link: "/admin-storico-fatture",
+        })
+      }
+
+      if (codice && !prodottoAnagrafica) {
+        lista.push({
+          id: `fattura-codice-non-anagrafica-${riga.id}`,
+          tipo: "fattura_codice_sconosciuto",
+          gruppo: "fatture",
+          gravita: "media",
+          titolo: "Codice fattura non in anagrafica",
+          descrizione: `Fattura ${numeroFattura} · codice ${riga.supplier_code} non trovato in products.`,
+          locale_nome: locale,
+          link: "/admin-storico-fatture",
+        })
+      }
+
+      if (riga.matched_order_id) {
+        const ordine = ordiniById.get(String(riga.matched_order_id))
+        const qtaFattura = numero(riga.quantity)
+        const qtaOrdine = numero(ordine?.quantita)
+
+        if (ordine && qtaOrdine > 0 && qtaFattura !== qtaOrdine) {
+          lista.push({
+            id: `fattura-qta-diversa-${riga.id}`,
+            tipo: "fattura_qta_diversa",
+            gruppo: "fatture",
+            gravita: "media",
+            titolo: "Quantità fattura diversa dall'ordine",
+            descrizione: `Fattura ${numeroFattura} · ${riga.product_name}: fattura ${qtaFattura}, ordine ${qtaOrdine}.`,
+            locale_nome: locale,
+            link: "/admin-storico-fatture",
+          })
+        }
+      }
+    })
+
+    return lista
+  }, [
+    locali,
+    giacenze,
+    ordini,
+    ordiniStorici,
+    products,
+    invoiceRows,
+    invoicesById,
+    prodottiByCode,
+    ordiniById,
+  ])
+
+  const alertFiltrati = useMemo(() => {
+    let lista = [...alertCorrenti]
+
+    if (filtroGruppo !== "tutti") lista = lista.filter((a) => a.gruppo === filtroGruppo)
+    if (filtroTipo !== "tutti") lista = lista.filter((a) => a.tipo === filtroTipo)
+
+    if (ricerca.trim()) {
+      const q = ricerca.toLowerCase()
+      lista = lista.filter((a) =>
+        [a.titolo, a.descrizione, a.locale_nome, a.email, a.settimana_key, a.tipo, a.gruppo]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
     }
 
-    showToast("Consegne salvate correttamente", "success");
-    setIsSaving(false);
-    caricaOrdini(localeId);
-  }
+    const pesoGravita: Record<string, number> = { alta: 0, media: 1, bassa: 2 }
+    return lista.sort((a, b) => pesoGravita[a.gravita] - pesoGravita[b.gravita])
+  }, [alertCorrenti, filtroTipo, filtroGruppo, ricerca])
 
-  async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("admin")
-    localStorage.removeItem("admin_mode")
-    window.location.href = "/admin"
-  }
+  const logFiltrati = useMemo(() => {
+    if (!ricerca.trim()) return alertLog.slice(0, 20)
+    const q = ricerca.toLowerCase()
+    return alertLog
+      .filter((a) =>
+        [a.locale_nome, a.email, a.tipo_alert, a.settimana_key, a.errore]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+      .slice(0, 20)
+  }, [alertLog, ricerca])
 
-  const ordiniFiltrati = useMemo(() => {
-    const q = ricerca.toLowerCase().trim();
-
-    if (!q) return ordini;
-
-    return ordini.filter((ordine) =>
-      [
-        ordine.nome_prodotto,
-        ordine.supplier_code,
-        ordine.locale_nome,
-        ordine.responsabile,
-        ordine.stato_consegna,
-        ordine.nota_consegna,
-      ]
-        .filter(Boolean)
-        .some((valore) => String(valore).toLowerCase().includes(q)),
-    );
-  }, [ordini, ricerca]);
-
-  const totaleOrdinato = ordiniFiltrati.reduce(
-    (sum, ordine) => sum + Number(ordine.quantita || 0),
-    0,
-  );
-
-  const totaleConsegnato = ordiniFiltrati.reduce(
-    (sum, ordine) => sum + Number(ordine.quantita_consegnata || 0),
-    0,
-  );
-
-  const totaleInevaso = Math.max(totaleOrdinato - totaleConsegnato, 0);
-
-  function badgeStato(stato: string) {
-    if (stato === "consegnato") {
-      return "bg-green-50 text-green-700 border-green-200";
+  const conteggi = useMemo(() => {
+    return {
+      totali: alertCorrenti.length,
+      alta: alertCorrenti.filter((a) => a.gravita === "alta").length,
+      operativo: alertCorrenti.filter((a) => a.gruppo === "operativo").length,
+      fatture: alertCorrenti.filter((a) => a.gruppo === "fatture").length,
+      anagrafica: alertCorrenti.filter((a) => a.gruppo === "anagrafica").length,
+      magazzino: alertCorrenti.filter((a) => a.gruppo === "magazzino").length,
+      consumi: alertCorrenti.filter((a) => a.gruppo === "consumi").length,
     }
+  }, [alertCorrenti])
 
-    if (stato === "parziale") {
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    }
-
-    return "bg-slate-100 text-slate-700 border-slate-200";
+  function classeGravita(gravita: string) {
+    if (gravita === "alta") return "bg-red-100 text-red-700 border-red-200"
+    if (gravita === "media") return "bg-amber-100 text-amber-700 border-amber-200"
+    return "bg-slate-100 text-slate-700 border-slate-200"
   }
+
+  function classeGruppo(gruppo: string) {
+    if (gruppo === "fatture") return "bg-blue-50 text-blue-700 border-blue-200"
+    if (gruppo === "anagrafica") return "bg-purple-50 text-purple-700 border-purple-200"
+    if (gruppo === "magazzino") return "bg-emerald-50 text-emerald-700 border-emerald-200"
+    if (gruppo === "consumi") return "bg-orange-50 text-orange-700 border-orange-200"
+    return "bg-slate-50 text-slate-700 border-slate-200"
+  }
+
+  function iconaTipo(tipo: string) {
+    if (tipo === "giacenza") return <Package className="h-5 w-5" />
+    if (tipo === "ordine") return <ShoppingCart className="h-5 w-5" />
+    if (tipo === "consegna") return <Truck className="h-5 w-5" />
+    if (tipo === "anomalia") return <TrendingUp className="h-5 w-5" />
+    if (tipo === "inattivo") return <Store className="h-5 w-5" />
+    if (tipo === "inevaso") return <Ban className="h-5 w-5" />
+    if (tipo.includes("fattura")) return <FileText className="h-5 w-5" />
+    if (tipo.includes("codice") || tipo.includes("prezzo")) return <Tag className="h-5 w-5" />
+    return <Bell className="h-5 w-5" />
+  }
+
+  function vai(link: string) {
+    window.location.href = link
+  }
+
+  async function eseguiControlloEmail() {
+    const conferma = window.confirm(
+      "Vuoi eseguire ora il controllo email per ordini/giacenze mancanti?"
+    )
+    if (!conferma) return
+
+    const res = await fetch("/api/check-missing-orders")
+    const json = await res.json()
+    console.log("RISULTATO ALERT EMAIL:", json)
+    alert("Controllo completato.")
+    caricaDati()
+  }
+
+  function KpiCard({
+    titolo,
+    valore,
+    descrizione,
+    icon: Icon,
+    colore,
+  }: {
+    titolo: string
+    valore: number | string
+    descrizione: string
+    icon: any
+    colore: string
+  }) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">{titolo}</p>
+            <h2 className="mt-2 text-3xl font-black text-slate-950">{valore}</h2>
+            <p className="mt-1 text-xs font-bold text-slate-500">{descrizione}</p>
+          </div>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${colore}`}>
+            <Icon className="h-6 w-6" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <main className="min-h-screen bg-slate-100 px-3 pb-24 pt-4 sm:px-5 sm:pb-4 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
-          <div className="flex items-center justify-between gap-3">
+    <main className="min-h-screen bg-slate-100">
+      <section className="mx-auto w-full max-w-[1600px] space-y-5 p-3 sm:p-5 lg:p-8">
+        <header className="rounded-3xl bg-slate-950 p-5 text-white shadow-sm sm:p-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h1 className="text-lg font-bold tracking-tight sm:text-xl">
-                OrdiniSiver
+              <p className="text-sm font-black uppercase tracking-wide text-blue-300">
+                Centro anomalie
+              </p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">
+                Alert operativi
               </h1>
-
-              <p className="mt-0.5 text-xs font-medium text-slate-300">
-                Admin · Gestione consegne
+              <p className="mt-2 max-w-3xl text-sm font-bold text-slate-300 sm:text-base">
+                Ordini, consegne, fatture, anagrafica, magazzino e consumi anomali.
               </p>
             </div>
 
-            <button
-              onClick={logout}
-              disabled={isSaving}
-              className="rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-500"
-            >
-              Logout
-            </button>
-          </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={caricaDati}
+                disabled={loading}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white disabled:bg-slate-600"
+              >
+                <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+                {loading ? "Aggiorno..." : "Aggiorna"}
+              </button>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => (window.location.href = "/admin-dashboard")}
-              disabled={isSaving}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
-            >
-              Home Admin
-            </button>
-
-            <button
-              onClick={() => window.history.back()}
-              disabled={isSaving}
-              className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white"
-            >
-              Indietro
-            </button>
+              <button
+                onClick={eseguiControlloEmail}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/10 px-5 text-sm font-black text-white hover:bg-white/15"
+              >
+                <Mail className="h-5 w-5" />
+                Controllo email
+              </button>
+            </div>
           </div>
+        </header>
+
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <KpiCard titolo="Alert attivi" valore={conteggi.totali} descrizione="Totale anomalie live" icon={Bell} colore="bg-slate-100 text-slate-700" />
+          <KpiCard titolo="Critici" valore={conteggi.alta} descrizione="Gravità alta" icon={AlertTriangle} colore="bg-red-100 text-red-700" />
+          <KpiCard titolo="Operativo" valore={conteggi.operativo} descrizione="Ordini e consegne" icon={Truck} colore="bg-amber-100 text-amber-700" />
+          <KpiCard titolo="Fatture" valore={conteggi.fatture} descrizione="Match e quantità" icon={FileText} colore="bg-blue-100 text-blue-700" />
+          <KpiCard titolo="Anagrafica" valore={conteggi.anagrafica} descrizione="Codici e prezzi" icon={Tag} colore="bg-purple-100 text-purple-700" />
+          <KpiCard titolo="Magazzino" valore={conteggi.magazzino + conteggi.consumi} descrizione="Soglie e consumi" icon={Package} colore="bg-emerald-100 text-emerald-700" />
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-black text-slate-950">
-            Carica fattura PDF
-          </h2>
-
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            Il sistema legge locale, numero fattura, prodotti e quantità
-            consegnate.
-          </p>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_180px_220px]">
+        <section className="grid gap-3 xl:grid-cols-[1fr_180px_180px_200px]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              type="file"
-              accept=".pdf"
-              onChange={(e) => setFileFattura(e.target.files?.[0] || null)}
-              className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-950"
+              type="text"
+              placeholder="Cerca alert, locale, fattura, prodotto, codice..."
+              value={ricerca}
+              onChange={(e) => setRicerca(e.target.value)}
+              className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white pl-10 pr-3 text-sm font-bold text-slate-950 placeholder:text-slate-500"
             />
-
-            <button
-              onClick={leggiFatturaPdf}
-              disabled={loadingFattura || isSaving}
-              className="h-14 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white disabled:bg-slate-400"
-            >
-              {loadingFattura ? "Lettura..." : "Leggi PDF"}
-            </button>
-
-            <button
-              onClick={applicaFatturaAgliOrdini}
-              disabled={!localeFattura || righeFattura.length === 0 || isSaving || savingStoricoFattura}
-              className="h-14 rounded-2xl bg-green-600 px-4 text-sm font-black text-white disabled:bg-slate-400"
-            >
-              {savingStoricoFattura ? "Salvataggio..." : "Applica alla consegna"}
-            </button>
           </div>
 
-          {(localeFattura || righeFattura.length > 0 || numeroFattura) && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-black text-slate-950">
-                Locale riconosciuto: {localeFattura?.name || "Non riconosciuto"}
-              </p>
-
-              <p className="mt-1 text-sm font-bold text-slate-700">
-                Fattura: {numeroFattura || "Non rilevata"}
-                {dataFattura ? ` · Data: ${dataFattura}` : ""}
-              </p>
-
-              {storicoFatturaId && (
-                <p className="mt-1 text-xs font-black text-green-700">
-                  Storico fattura salvato
-                </p>
-              )}
-
-              <div className="mt-3 space-y-2">
-                {righeFattura.map((riga, index) => {
-                  const ordineMatch = trovaOrdinePerRiga(riga);
-
-                  return (
-                    <div
-                      key={`${riga.codice}-${index}`}
-                      className="rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                    >
-                      <div className="font-black text-slate-950">
-                        {riga.prodotto}
-                      </div>
-
-                      <div className="mt-1 text-xs font-bold text-slate-600">
-                        Codice: {riga.codice} · Quantità: {riga.quantita} ·
-                        Prezzo: {formatPrezzo(riga.prezzo)}
-                      </div>
-
-                      {riga.codiceCorretto && (
-                        <div className="mt-1 text-xs font-black text-blue-700">
-                          Corretto da {riga.codiceLetto} a {riga.codice}
-                        </div>
-                      )}
-
-                      {riga.prezzoVariato && (
-                        <div
-                          className={`mt-1 text-xs font-black ${
-                            Number(riga.variazionePercentuale || 0) > 0
-                              ? "text-red-700"
-                              : "text-green-700"
-                          }`}
-                        >
-                          Prezzo variato: listino {formatPrezzo(riga.prezzoAnagrafica)} ·
-                          fattura {formatPrezzo(riga.prezzo)} ·
-                          variazione {Number(riga.variazionePercentuale || 0) > 0 ? "+" : ""}
-                          {Number(riga.variazionePercentuale || 0).toFixed(2)}%
-                        </div>
-                      )}
-
-                      <div
-                        className={`mt-2 text-xs font-black ${
-                          ordineMatch ? "text-green-700" : "text-red-700"
-                        }`}
-                      >
-                        {ordineMatch
-                          ? `Abbinato a ordine: ${ordineMatch.nome_prodotto}`
-                          : "Nessun ordine abbinato"}
-                      </div>
-
-                      {descriviAnomalia(riga, ordineMatch) && (
-                        <div className="mt-1 text-xs font-black text-amber-700">
-                          Anomalia: {descriviAnomalia(riga, ordineMatch)}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <select
-            value={localeId}
-            onChange={(e) => caricaOrdini(e.target.value)}
-            disabled={isSaving}
-            className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-bold text-slate-950 outline-none focus:border-blue-600"
+            value={filtroGruppo}
+            onChange={(e) => setFiltroGruppo(e.target.value)}
+            className="h-12 rounded-xl border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-950"
           >
-            <option value="">Seleziona locale</option>
-
-            {locali.map((locale) => (
-              <option key={locale.id} value={locale.id}>
-                {locale.name}
-              </option>
-            ))}
+            <option value="tutti">Tutti i gruppi</option>
+            <option value="operativo">Operativo</option>
+            <option value="fatture">Fatture</option>
+            <option value="anagrafica">Anagrafica</option>
+            <option value="magazzino">Magazzino</option>
+            <option value="consumi">Consumi</option>
           </select>
 
-          <input
-            type="text"
-            placeholder="Cerca prodotto, responsabile, stato..."
-            value={ricerca}
-            onChange={(e) => setRicerca(e.target.value)}
-            className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 lg:col-span-2"
-          />
+          <select
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value)}
+            className="h-12 rounded-xl border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-950"
+          >
+            <option value="tutti">Tutti i tipi</option>
+            <option value="giacenza">Giacenze</option>
+            <option value="ordine">Ordini</option>
+            <option value="consegna">Consegne</option>
+            <option value="fattura_anomalia">Fattura anomalia</option>
+            <option value="fattura_no_match">Fattura no match</option>
+            <option value="fattura_qta_diversa">Quantità diversa</option>
+            <option value="prodotto_senza_codice">Prodotto senza codice</option>
+            <option value="prodotto_senza_prezzo">Prodotto senza prezzo</option>
+            <option value="anomalia">Consumi anomali</option>
+            <option value="inevaso">Sempre inevasi</option>
+            <option value="inattivo">Locali inattivi</option>
+            <option value="soglia">Sotto soglia</option>
+          </select>
+
+          <button onClick={() => vai("/admin-storico-fatture")} className="h-12 rounded-xl bg-blue-600 px-4 text-sm font-black text-white">
+            Storico fatture
+          </button>
+
         </section>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">Totale ordinato</p>
-            <h3 className="mt-2 text-3xl font-black text-slate-950">
-              {totaleOrdinato}
-            </h3>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">
-              Totale consegnato
-            </p>
-            <h3 className="mt-2 text-3xl font-black text-green-700">
-              {totaleConsegnato}
-            </h3>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">Totale inevaso</p>
-            <h3 className="mt-2 text-3xl font-black text-amber-700">
-              {totaleInevaso}
-            </h3>
-          </div>
-        </section>
+        {errore && (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-700">{errore}</section>
+        )}
 
         {loading ? (
           <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500">
-            Caricamento ordini...
+            Caricamento alert...
           </section>
         ) : (
-          <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:overflow-hidden md:p-0">
-            <div className="hidden grid-cols-[1fr_110px_100px_150px_140px_1fr] bg-slate-950 text-[11px] font-bold uppercase tracking-wide text-white md:grid">
-              <div className="px-3 py-2.5">Prodotto</div>
-              <div className="px-3 py-2.5">Codice</div>
-              <div className="px-3 py-2.5">Ordinato</div>
-              <div className="px-3 py-2.5">Consegnato</div>
-              <div className="px-3 py-2.5">Stato</div>
-              <div className="px-3 py-2.5">Nota</div>
-            </div>
+          <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <h2 className="text-lg font-black text-slate-950">Alert attivi</h2>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                  {alertFiltrati.length} filtrati
+                </span>
+              </div>
 
-            <div className="hidden md:block">
-              {ordiniFiltrati.map((ordine, index) => {
-                const realIndex = ordini.findIndex((o) => o.id === ordine.id);
-                const stato = ordine.stato_consegna || "da_consegnare";
-
-                return (
-                  <div
-                    key={ordine.id}
-                    className={`grid grid-cols-[1fr_110px_100px_150px_140px_1fr] items-center border-b border-slate-100 ${
-                      index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                    }`}
-                  >
-                    <div className="min-w-0 px-3 py-3">
-                      <p className="truncate text-sm font-bold text-slate-950">
-                        {ordine.nome_prodotto}
-                      </p>
-                      <p className="mt-0.5 text-xs font-bold text-slate-600">
-                        {ordine.responsabile || "Senza responsabile"}
-                      </p>
-                    </div>
-
-                    <div className="px-3 py-3 text-xs font-black text-slate-700">
-                      {ordine.supplier_code || "-"}
-                    </div>
-
-                    <div className="px-3 py-3 text-sm font-black text-slate-900">
-                      {ordine.quantita}
-                    </div>
-
-                    <div className="px-3 py-2">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={ordine.quantita_consegnata ?? ""}
-                        disabled={isSaving}
-                        onChange={(e) =>
-                          aggiornaConsegna(realIndex, e.target.value)
-                        }
-                        className="h-10 w-full rounded-lg border-2 border-slate-300 bg-white px-3 text-right text-sm font-bold text-slate-950 outline-none focus:border-blue-600"
-                      />
-                    </div>
-
-                    <div className="px-3 py-3">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${badgeStato(
-                          stato,
-                        )}`}
-                      >
-                        {stato.replace("_", " ")}
+              <div className="space-y-3">
+                {alertFiltrati.map((alert) => (
+                  <div key={alert.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 gap-3">
+                        <div className="mt-1 shrink-0 text-slate-700">{iconaTipo(alert.tipo)}</div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-black text-slate-950">{alert.titolo}</h3>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${classeGruppo(alert.gruppo)}`}>
+                              {alert.gruppo}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-600">{alert.descrizione}</p>
+                          <p className="mt-1 text-[11px] font-bold text-slate-500">
+                            {alert.email || "Nessuna email"} · {alert.settimana_key || "senza settimana"}
+                          </p>
+                          {alert.link && (
+                            <button onClick={() => vai(alert.link || "/admin-dashboard")} className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-black text-white">
+                              Apri dettaglio
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase ${classeGravita(alert.gravita)}`}>
+                        {alert.gravita}
                       </span>
-                    </div>
-
-                    <div className="px-3 py-2">
-                      <input
-                        type="text"
-                        placeholder="Nota consegna"
-                        value={ordine.nota_consegna || ""}
-                        disabled={isSaving}
-                        onChange={(e) =>
-                          aggiornaNota(realIndex, e.target.value)
-                        }
-                        className="h-10 w-full rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
-                      />
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
 
-            <div className="space-y-3 md:hidden">
-              {ordiniFiltrati.map((ordine) => {
-                const realIndex = ordini.findIndex((o) => o.id === ordine.id);
-                const stato = ordine.stato_consegna || "da_consegnare";
-
-                return (
-                  <div
-                    key={ordine.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-                  >
-                    <h3 className="text-sm font-black leading-tight text-slate-950">
-                      {ordine.nome_prodotto}
-                    </h3>
-
-                    <p className="mt-1 text-xs font-bold text-slate-600">
-                      {ordine.responsabile || "Senza responsabile"}
-                    </p>
-
-                    <p className="mt-1 text-xs font-black text-slate-500">
-                      Codice: {ordine.supplier_code || "-"}
-                    </p>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="rounded-lg bg-blue-100 px-2 py-1 text-xs font-black text-blue-700">
-                        Ordinato: {ordine.quantita}
-                      </span>
-
-                      <span
-                        className={`rounded-lg border px-2 py-1 text-xs font-black uppercase ${badgeStato(
-                          stato,
-                        )}`}
-                      >
-                        {stato.replace("_", " ")}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 gap-2">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="Quantità consegnata"
-                        value={ordine.quantita_consegnata ?? ""}
-                        disabled={isSaving}
-                        onChange={(e) =>
-                          aggiornaConsegna(realIndex, e.target.value)
-                        }
-                        className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
-                      />
-
-                      <input
-                        type="text"
-                        placeholder="Nota consegna"
-                        value={ordine.nota_consegna || ""}
-                        disabled={isSaving}
-                        onChange={(e) =>
-                          aggiornaNota(realIndex, e.target.value)
-                        }
-                        className="h-14 rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600"
-                      />
-                    </div>
+                {alertFiltrati.length === 0 && (
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-700">
+                    Nessun alert attivo con i filtri selezionati.
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
 
-            {!localeId && (
-              <div className="px-4 py-8 text-center text-sm font-semibold text-slate-500">
-                Seleziona un locale o carica una fattura.
-              </div>
-            )}
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <h2 className="text-lg font-black text-slate-950">Stato controlli</h2>
+                </div>
 
-            {localeId && ordiniFiltrati.length === 0 && (
-              <div className="px-4 py-8 text-center text-sm font-semibold text-slate-500">
-                Nessun ordine trovato per questo locale.
+                <div className="space-y-2">
+                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Fatture lette</span><span>{invoiceImports.length}</span></div>
+                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Righe fattura analizzate</span><span>{invoiceRows.length}</span></div>
+                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Prodotti anagrafica</span><span>{products.length}</span></div>
+                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Ordini storici</span><span>{ordiniStorici.length}</span></div>
+                </div>
               </div>
-            )}
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-blue-600" />
+                  <h2 className="text-lg font-black text-slate-950">Log email alert</h2>
+                </div>
+
+                <div className="space-y-3">
+                  {logFiltrati.map((log) => (
+                    <div key={log.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-950">{log.locale_nome}</h3>
+                          <p className="mt-1 text-xs font-bold text-slate-600">{log.email} · {log.tipo_alert}</p>
+                          <p className="mt-1 text-[11px] font-bold text-slate-500">Settimana: {log.settimana_key}</p>
+                          {log.errore && <p className="mt-1 text-xs font-bold text-red-600">{log.errore}</p>}
+                        </div>
+                        {log.inviato ? <CheckCircle className="h-5 w-5 text-green-600" /> : <XCircle className="h-5 w-5 text-red-600" />}
+                      </div>
+                    </div>
+                  ))}
+
+                  {logFiltrati.length === 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+                      Nessun log email trovato.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </section>
         )}
-      </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur sm:hidden">
-        <button
-          onClick={salvaConsegne}
-          disabled={!localeId || ordini.length === 0 || isSaving}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 text-base font-bold text-white disabled:bg-slate-400"
-        >
-          {isSaving ? "Salvataggio..." : "Salva consegne"}
+        <button onClick={caricaDati} disabled={loading} className="fixed bottom-4 right-4 inline-flex h-12 items-center gap-2 rounded-full bg-slate-950 px-5 text-sm font-black text-white shadow-xl disabled:bg-slate-400">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Aggiorna
         </button>
-      </div>
-
-      <button
-        onClick={salvaConsegne}
-        disabled={!localeId || ordini.length === 0 || isSaving}
-        className="mx-auto mt-4 hidden h-12 w-full max-w-7xl items-center justify-center gap-2 rounded-xl bg-green-600 px-5 text-base font-bold text-white disabled:bg-slate-400 sm:flex"
-      >
-        {isSaving ? "Salvataggio..." : "Salva consegne"}
-      </button>
+      </section>
     </main>
-  );
+  )
 }

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Bell,
+  Building2,
   ClipboardList,
   FileText,
   Home,
@@ -16,6 +17,7 @@ import {
   Truck,
   Users,
   Warehouse,
+  SlidersHorizontal,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
@@ -29,12 +31,15 @@ const sections = [
     items: [
       { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
       { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
+      { href: "/admin-soglie-giacenze", label: "Soglie giacenze", icon: SlidersHorizontal },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
+      { href: "/admin-storico-ordini", label: "Storico ordini", icon: ClipboardList },
     ],
   },
   {
     title: "Anagrafiche",
     items: [
+      { href: "/admin-locali", label: "Locali", icon: Building2 },
       { href: "/admin-prodotti", label: "Prodotti", icon: Package },
       { href: "/admin-categories", label: "Categorie", icon: Tags },
       { href: "/admin-units", label: "Unità", icon: Ruler },
@@ -86,7 +91,8 @@ export default function AdminV2Shell({ children }: { children: React.ReactNode }
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  const active =
+                    pathname === item.href || pathname.startsWith(`${item.href}/`)
 
                   return (
                     <Link

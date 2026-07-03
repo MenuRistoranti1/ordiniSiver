@@ -10,6 +10,15 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const supabase = createClient(supabaseUrl, serviceKey)
 
+
+async function verificaAdmin(req: NextRequest) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+
+  const { data, error } = await supabase.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
 function numeroIT(value: string) {
   const cleaned = String(value || "")
     .replace("€", "")
@@ -171,6 +180,10 @@ async function creaNotifica({
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await verificaAdmin(req))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     if (!supabaseUrl || !serviceKey) {
       return NextResponse.json(
         { error: "Variabili Supabase mancanti nel .env.local" },

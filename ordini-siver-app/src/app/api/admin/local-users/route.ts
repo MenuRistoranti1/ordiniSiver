@@ -5,15 +5,18 @@ function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl) {
-    throw new Error("Manca NEXT_PUBLIC_SUPABASE_URL")
-  }
-
-  if (!serviceRoleKey) {
-    throw new Error("Manca SUPABASE_SERVICE_ROLE_KEY")
-  }
+  if (!supabaseUrl) throw new Error("Manca NEXT_PUBLIC_SUPABASE_URL")
+  if (!serviceRoleKey) throw new Error("Manca SUPABASE_SERVICE_ROLE_KEY")
 
   return createClient(supabaseUrl, serviceRoleKey)
+}
+
+
+async function verificaAdmin(req: Request, supabaseAdmin: ReturnType<typeof getSupabaseAdmin>) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+  const { data, error } = await supabaseAdmin.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
 }
 
 function normalizzaUsername(value: string) {
@@ -24,9 +27,13 @@ function creaEmailInterna(utente: string) {
   return `${normalizzaUsername(utente)}@local.siver.internal`
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
 
     const { data: locali, error: localiError } = await supabaseAdmin
       .from("restaurants")
@@ -42,8 +49,7 @@ export async function GET() {
 
     const { data: utenti, error: utentiError } = await supabaseAdmin
       .from("local_users")
-      .select(
-        `
+      .select(`
         id,
         nome,
         cognome,
@@ -56,8 +62,7 @@ export async function GET() {
         updated_at,
         last_login,
         force_password_change
-      `
-      )
+      `)
       .order("created_at", { ascending: false })
 
     if (utentiError) {
@@ -67,9 +72,51 @@ export async function GET() {
       )
     }
 
+    const userIds = (utenti || []).map((u) => u.id)
+
+    const { data: assegnazioni, error: assegnazioniError } =
+      await supabaseAdmin
+        .from("local_user_restaurants")
+        .select("user_id, restaurant_id")
+        .in("user_id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"])
+
+    if (assegnazioniError) {
+      return NextResponse.json(
+        { error: `Errore assegnazioni locali: ${assegnazioniError.message}` },
+        { status: 500 }
+      )
+    }
+
+    const assegnazioniByUser = new Map<string, string[]>()
+
+    ;(assegnazioni || []).forEach((riga) => {
+      const userId = String(riga.user_id)
+      const localeId = String(riga.restaurant_id)
+
+      if (!assegnazioniByUser.has(userId)) {
+        assegnazioniByUser.set(userId, [])
+      }
+
+      assegnazioniByUser.get(userId)?.push(localeId)
+    })
+
+    const utentiConAssegnazioni = (utenti || []).map((utente) => {
+      const assegnati = assegnazioniByUser.get(String(utente.id)) || []
+
+      return {
+        ...utente,
+        locali_assegnati:
+          assegnati.length > 0
+            ? assegnati
+            : utente.locale_id
+              ? [utente.locale_id]
+              : [],
+      }
+    })
+
     return NextResponse.json({
       locali: locali || [],
-      utenti: utenti || [],
+      utenti: utentiConAssegnazioni,
     })
   } catch (error) {
     return NextResponse.json(
@@ -85,6 +132,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const body = await req.json()
 
     const nome = String(body.nome || "").trim()
@@ -116,10 +168,7 @@ export async function POST(req: Request) {
       .single()
 
     if (localeError || !locale) {
-      return NextResponse.json(
-        { error: "Locale non trovato." },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Locale non trovato." }, { status: 404 })
     }
 
     const { data: esistente, error: esistenteError } = await supabaseAdmin
@@ -129,10 +178,7 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     if (esistenteError) {
-      return NextResponse.json(
-        { error: esistenteError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: esistenteError.message }, { status: 500 })
     }
 
     if (esistente) {
@@ -142,6 +188,8 @@ export async function POST(req: Request) {
       )
     }
 
+    const fullName = `${nome} ${cognome}`.trim()
+
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email: emailInterna,
@@ -150,6 +198,9 @@ export async function POST(req: Request) {
         user_metadata: {
           nome,
           cognome,
+          full_name: fullName,
+          display_name: fullName,
+          name: fullName,
           utente,
           locale_id: locale.id,
           locale_nome: locale.name,
@@ -169,29 +220,31 @@ export async function POST(req: Request) {
       )
     }
 
-    const { error: insertError } = await supabaseAdmin
-      .from("local_users")
-      .insert({
-        id: authData.user.id,
-        nome,
-        cognome,
-        utente,
-        email_interna: emailInterna,
-        locale_id: locale.id,
-        locale_nome: locale.name,
-        active: true,
-        force_password_change: false,
-        updated_at: new Date().toISOString(),
-      })
+    const { error: insertError } = await supabaseAdmin.from("local_users").insert({
+      id: authData.user.id,
+      nome,
+      cognome,
+      utente,
+      email_interna: emailInterna,
+      locale_id: locale.id,
+      locale_nome: locale.name,
+      active: true,
+      force_password_change: false,
+      updated_at: new Date().toISOString(),
+    })
 
     if (insertError) {
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
 
-      return NextResponse.json(
-        { error: insertError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
+
+    await supabaseAdmin.from("local_user_restaurants").insert({
+      user_id: authData.user.id,
+      restaurant_id: locale.id,
+      restaurant_name: locale.name,
+      role: "responsabile",
+    })
 
     return NextResponse.json({ ok: true })
   } catch (error) {

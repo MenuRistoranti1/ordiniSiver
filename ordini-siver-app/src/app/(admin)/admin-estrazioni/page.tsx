@@ -16,11 +16,6 @@ export default function AdminEstrazioni() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     const oggi = new Date()
     const primo = new Date(oggi.getFullYear(), oggi.getMonth(), 1)
 

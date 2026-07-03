@@ -1,87 +1,101 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { useToast } from "@/components/Toast"
-import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/Toast";
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader";
 
 export default function StoricoGiacenze() {
-  const { showToast } = useToast()
+  const { showToast } = useToast();
 
-  const [giacenze, setGiacenze] = useState<any[]>([])
-  const [soglie, setSoglie] = useState<any[]>([])
-  const [localeNome, setLocaleNome] = useState("")
-  const [localeId, setLocaleId] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [gruppoAperto, setGruppoAperto] = useState<string | null>(null)
-  const [modificaAperta, setModificaAperta] = useState<string | null>(null)
-  const [quantitaModificate, setQuantitaModificate] = useState<any>({})
-  const [loading, setLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
+  const [giacenze, setGiacenze] = useState<any[]>([]);
+  const [soglie, setSoglie] = useState<any[]>([]);
+  const [localeNome, setLocaleNome] = useState("");
+  const [localeId, setLocaleId] = useState("");
+  const [utenteNome, setUtenteNome] = useState("");
+  const [utenteEmail, setUtenteEmail] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [gruppoAperto, setGruppoAperto] = useState<string | null>(null);
+  const [modificaAperta, setModificaAperta] = useState<string | null>(null);
+  const [quantitaModificate, setQuantitaModificate] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [ricerca, setRicerca] = useState("")
-  const [filtroStato, setFiltroStato] = useState("tutti")
-  const [ordinamento, setOrdinamento] = useState("nome")
+  const [ricerca, setRicerca] = useState("");
+  const [filtroStato, setFiltroStato] = useState("tutti");
+  const [ordinamento, setOrdinamento] = useState("nome");
 
   useEffect(() => {
-    inizializzaPagina()
-  }, [])
+    inizializzaPagina();
+  }, []);
 
   async function inizializzaPagina() {
-    setLoading(true)
+    setLoading(true);
 
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (error || !user) {
-      window.location.href = "/"
-      return
+      window.location.href = "/";
+      return;
     }
 
-    const ruolo = user.app_metadata?.role
+    const ruolo = user.app_metadata?.role;
+    const nomeUtente = ricavaNomeUtente(user);
+
+    setUtenteNome(nomeUtente);
+    setUtenteEmail(String(user.email || ""));
 
     if (ruolo === "admin") {
-      const params = new URLSearchParams(window.location.search)
-      const idDaUrl = params.get("locale_id") || ""
-      const nomeDaUrl = params.get("locale_nome") || "Locale selezionato"
+      const params = new URLSearchParams(window.location.search);
+      const idDaUrl = params.get("locale_id") || "";
+      const nomeDaUrl = params.get("locale_nome") || "Locale selezionato";
 
-      setIsAdmin(true)
+      setIsAdmin(true);
 
       if (!idDaUrl) {
-        showToast("Seleziona prima un locale", "warning")
-        window.location.href = "/admin-dashboard"
-        return
+        showToast("Seleziona prima un locale", "warning");
+        window.location.href = "/admin-dashboard";
+        return;
       }
 
-      setLocaleId(idDaUrl)
-      setLocaleNome(nomeDaUrl)
-      await caricaDati(idDaUrl)
-      setLoading(false)
-      return
+      setLocaleId(idDaUrl);
+      setLocaleNome(nomeDaUrl);
+      await caricaDati(idDaUrl);
+      setLoading(false);
+      return;
     }
 
     if (ruolo !== "locale") {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
+      await supabase.auth.signOut();
+      window.location.href = "/";
+      return;
     }
 
-    const id = String(user.app_metadata?.locale_id || "")
-    const nome = String(user.app_metadata?.locale_nome || "")
+    const id =
+      localStorage.getItem("locale_id") ||
+      String(user.app_metadata?.locale_id || "");
+
+    const nome =
+      localStorage.getItem("locale_nome") ||
+      String(user.app_metadata?.locale_nome || "");
 
     if (!id || !nome) {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
+      await supabase.auth.signOut();
+      localStorage.removeItem("locale_id");
+      localStorage.removeItem("locale_nome");
+      localStorage.removeItem("locale_scelto");
+      window.location.href = "/";
+      return;
     }
 
-    setIsAdmin(false)
-    setLocaleId(id)
-    setLocaleNome(nome)
-    await caricaDati(id)
-    setLoading(false)
+    setIsAdmin(false);
+    setLocaleId(id);
+    setLocaleNome(nome);
+    await caricaDati(id);
+    setLoading(false);
   }
 
   async function caricaDati(id: string) {
@@ -89,140 +103,225 @@ export default function StoricoGiacenze() {
       .from("giacenze_settimana")
       .select("*")
       .eq("locale_id", id)
-      .order("settimana_key", { ascending: false })
+      .order("settimana_key", { ascending: false });
 
     if (giacenzeError) {
-      console.log(giacenzeError)
-      showToast("Errore caricamento storico giacenze", "error")
-      return
+      console.log(giacenzeError);
+      showToast("Errore caricamento storico giacenze", "error");
+      return;
     }
 
-    const { data: soglieData, error: soglieError } = await supabase
+    const { data: settingsData, error: settingsError } = await supabase
       .from("restaurant_product_settings")
-      .select(`
-        id,
-        min_stock,
-        max_stock,
-        active,
-        prodotto_id,
-        product_id,
-        products (
-          id,
-          name,
-          supplier_code
-        )
-      `)
-      .eq("restaurant_id", id)
+      .select("id, min_stock, max_stock, active, prodotto_id, product_id")
+      .eq("restaurant_id", id);
 
-    if (soglieError) {
-      console.log(soglieError)
-      showToast("Errore caricamento soglie", "error")
+    if (settingsError) {
+      console.log(settingsError);
+      showToast("Errore caricamento soglie", "error");
+      setGiacenze(giacenzeData || []);
+      setSoglie([]);
+      return;
     }
 
-    const soglieFormattate = (soglieData || []).map((item: any) => ({
-      nome_prodotto: item.products?.name || "",
-      supplier_code: item.products?.supplier_code || "",
-      min_stock: item.min_stock || 0,
-      max_stock: item.max_stock || 0,
-      active: item.active,
-    }))
+    const productIds = (settingsData || [])
+      .map((item: any) => item.prodotto_id || item.product_id)
+      .filter(Boolean);
 
-    setGiacenze(giacenzeData || [])
-    setSoglie(soglieFormattate)
+    let prodottiDb: any[] = [];
+
+    if (productIds.length > 0) {
+      const { data: prodottiData, error: prodottiError } = await supabase
+        .from("products")
+        .select("id, name, supplier_code")
+        .in("id", productIds);
+
+      if (prodottiError) {
+        console.log(prodottiError);
+        showToast("Errore caricamento prodotti soglie", "error");
+      } else {
+        prodottiDb = prodottiData || [];
+      }
+    }
+
+    const soglieFormattate = (settingsData || []).map((item: any) => {
+      const idProdotto = item.prodotto_id || item.product_id;
+      const prodotto = prodottiDb.find(
+        (p: any) => String(p.id) === String(idProdotto),
+      );
+
+      return {
+        nome_prodotto: prodotto?.name || "",
+        supplier_code: prodotto?.supplier_code || "",
+        min_stock: item.min_stock || 0,
+        max_stock: item.max_stock || 0,
+        active: item.active,
+      };
+    });
+
+    setGiacenze(giacenzeData || []);
+    setSoglie(soglieFormattate);
+  }
+
+  function ricavaNomeUtente(user: any) {
+    const valoreDiretto = String(
+      user.app_metadata?.full_name ||
+        user.app_metadata?.name ||
+        user.app_metadata?.display_name ||
+        user.app_metadata?.nome ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.display_name ||
+        user.user_metadata?.nome ||
+        "",
+    ).trim();
+
+    if (valoreDiretto && !valoreDiretto.includes("@")) {
+      return valoreDiretto;
+    }
+
+    const email = String(user.email || "").trim();
+    const parteLocale = email.split("@")[0] || "";
+
+    if (!parteLocale) return "Responsabile";
+
+    const pulito = parteLocale
+      .replace(/^[a-z]([a-z]{3,})$/i, "$1")
+      .replace(/[._-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!pulito) return "Responsabile";
+
+    return pulito
+      .split(" ")
+      .map(
+        (parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase(),
+      )
+      .join(" ");
+  }
+
+  function formatResponsabile(valore: string) {
+    const testo = String(valore || "").trim();
+
+    if (!testo) return "Responsabile";
+
+    if (utenteEmail && testo.toLowerCase() === utenteEmail.toLowerCase()) {
+      return utenteNome || "Responsabile";
+    }
+
+    if (!testo.includes("@")) return testo;
+
+    const parteLocale = testo.split("@")[0] || "";
+    const pulito = parteLocale
+      .replace(/^[a-z]([a-z]{3,})$/i, "$1")
+      .replace(/[._-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!pulito) return "Responsabile";
+
+    return pulito
+      .split(" ")
+      .map(
+        (parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase(),
+      )
+      .join(" ");
   }
 
   function getSoglia(nomeProdotto: string) {
     return soglie.find(
       (s) =>
-        String(s.nome_prodotto || "").toLowerCase().trim() ===
-        String(nomeProdotto || "").toLowerCase().trim()
-    )
+        String(s.nome_prodotto || "")
+          .toLowerCase()
+          .trim() ===
+        String(nomeProdotto || "")
+          .toLowerCase()
+          .trim(),
+    );
   }
 
   function statoSoglia(item: any) {
-    const soglia = getSoglia(item.nome_prodotto)
-    const qta = Number(item.quantita || 0)
-    const min = Number(soglia?.min_stock || 0)
-    const max = Number(soglia?.max_stock || 0)
+    const soglia = getSoglia(item.nome_prodotto);
+    const qta = Number(item.quantita || 0);
+    const min = Number(soglia?.min_stock || 0);
+    const max = Number(soglia?.max_stock || 0);
 
-    if (!soglia) return "Senza soglia"
-    if (min > 0 && qta < min) return "Sotto soglia"
-    if (max > 0 && qta > max) return "Sopra soglia"
+    if (!soglia) return "Senza soglia";
+    if (min > 0 && qta < min) return "Sotto soglia";
+    if (max > 0 && qta > max) return "Sopra soglia";
 
-    return "Corretto"
+    return "Corretto";
   }
 
   function classeStato(stato: string) {
-    if (stato === "Sotto soglia") return "bg-red-100 text-red-700"
-    if (stato === "Sopra soglia") return "bg-orange-100 text-orange-700"
-    if (stato === "Corretto") return "bg-green-100 text-green-700"
+    if (stato === "Sotto soglia") return "bg-red-100 text-red-700";
+    if (stato === "Sopra soglia") return "bg-orange-100 text-orange-700";
+    if (stato === "Corretto") return "bg-green-100 text-green-700";
 
-    return "bg-slate-100 text-slate-700"
+    return "bg-slate-100 text-slate-700";
   }
 
   async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("locale_id")
-    localStorage.removeItem("locale_nome")
-    localStorage.removeItem("restaurant_name")
-    window.location.href = "/"
+    await supabase.auth.signOut();
+    window.location.href = "/";
   }
 
   function tornaHome() {
     if (isAdmin) {
-      window.location.href = "/admin-dashboard"
-      return
+      window.location.href = "/admin-dashboard";
+      return;
     }
 
-    window.location.href = "/dashboard"
+    window.location.href = "/dashboard";
   }
 
   function apriModifica(gruppo: any) {
-    if (!isAdmin) return
+    if (!isAdmin) return;
 
-    const valori: any = {}
+    const valori: any = {};
 
     gruppo.prodotti.forEach((item: any) => {
-      valori[item.id] = item.quantita
-    })
+      valori[item.id] = item.quantita;
+    });
 
-    setQuantitaModificate(valori)
-    setModificaAperta(gruppo.id)
-    setGruppoAperto(gruppo.id)
+    setQuantitaModificate(valori);
+    setModificaAperta(gruppo.id);
+    setGruppoAperto(gruppo.id);
   }
 
   function aggiornaQuantita(id: string, valore: string) {
     setQuantitaModificate({
       ...quantitaModificate,
       [id]: valore,
-    })
+    });
   }
 
   async function salvaModifiche(gruppo: any) {
-    if (!isAdmin || isSaving) return
+    if (!isAdmin || isSaving) return;
 
-    setIsSaving(true)
+    setIsSaving(true);
 
     for (const item of gruppo.prodotti) {
-      const nuovaQuantita = Number(quantitaModificate[item.id])
+      const nuovaQuantita = Number(quantitaModificate[item.id]);
 
       const { error } = await supabase
         .from("giacenze_settimana")
         .update({ quantita: nuovaQuantita })
-        .eq("id", item.id)
+        .eq("id", item.id);
 
       if (error) {
-        console.log(error)
-        setIsSaving(false)
-        showToast("Errore salvataggio modifiche", "error")
-        return
+        console.log(error);
+        setIsSaving(false);
+        showToast("Errore salvataggio modifiche", "error");
+        return;
       }
     }
 
-    showToast("Giacenza modificata correttamente", "success")
-    setModificaAperta(null)
-    setIsSaving(false)
-    await caricaDati(localeId)
+    showToast("Giacenza modificata correttamente", "success");
+    setModificaAperta(null);
+    setIsSaving(false);
+    await caricaDati(localeId);
   }
 
   const gruppi = useMemo(() => {
@@ -231,10 +330,11 @@ export default function StoricoGiacenze() {
         const data =
           item.settimana_key ||
           item.data_inserimento ||
-          item.created_at?.split("T")[0]
+          item.created_at?.split("T")[0];
 
-        const responsabile = item.responsabile || "Senza responsabile"
-        const chiave = `${data}-${responsabile}`
+        const responsabileOriginale = item.responsabile || "Senza responsabile";
+        const responsabile = formatResponsabile(responsabileOriginale);
+        const chiave = `${data}-${responsabile}`;
 
         if (!acc[chiave]) {
           acc[chiave] = {
@@ -242,48 +342,53 @@ export default function StoricoGiacenze() {
             data,
             responsabile,
             prodotti: [],
-          }
+          };
         }
 
-        acc[chiave].prodotti.push(item)
-        return acc
-      }, {})
-    ) as any[]
+        acc[chiave].prodotti.push(item);
+        return acc;
+      }, {}),
+    ) as any[];
 
-    return gruppati.sort((a, b) => String(b.data).localeCompare(String(a.data)))
-  }, [giacenze])
+    return gruppati.sort((a, b) =>
+      String(b.data).localeCompare(String(a.data)),
+    );
+  }, [giacenze, utenteNome, utenteEmail]);
 
   const gruppiFiltrati = useMemo(() => {
-    const q = ricerca.toLowerCase().trim()
+    const q = ricerca.toLowerCase().trim();
 
     return gruppi
       .map((gruppo: any) => {
-        let prodotti = [...gruppo.prodotti]
+        let prodotti = [...gruppo.prodotti];
 
         if (q) {
           prodotti = prodotti.filter((item: any) =>
-            String(item.nome_prodotto || "").toLowerCase().includes(q)
-          )
+            String(item.nome_prodotto || "")
+              .toLowerCase()
+              .includes(q),
+          );
         }
 
         if (filtroStato !== "tutti") {
           prodotti = prodotti.filter(
-            (item: any) => statoSoglia(item) === filtroStato
-          )
+            (item: any) => statoSoglia(item) === filtroStato,
+          );
         }
 
         if (ordinamento === "nome") {
           prodotti.sort((a: any, b: any) =>
             String(a.nome_prodotto || "").localeCompare(
-              String(b.nome_prodotto || "")
-            )
-          )
+              String(b.nome_prodotto || ""),
+            ),
+          );
         }
 
         if (ordinamento === "quantita") {
           prodotti.sort(
-            (a: any, b: any) => Number(b.quantita || 0) - Number(a.quantita || 0)
-          )
+            (a: any, b: any) =>
+              Number(b.quantita || 0) - Number(a.quantita || 0),
+          );
         }
 
         if (ordinamento === "stato") {
@@ -292,33 +397,35 @@ export default function StoricoGiacenze() {
             Corretto: 2,
             "Sopra soglia": 3,
             "Senza soglia": 4,
-          }
+          };
 
-          prodotti.sort((a: any, b: any) => peso[statoSoglia(a)] - peso[statoSoglia(b)])
+          prodotti.sort(
+            (a: any, b: any) => peso[statoSoglia(a)] - peso[statoSoglia(b)],
+          );
         }
 
         return {
           ...gruppo,
           prodotti,
-        }
+        };
       })
-      .filter((gruppo: any) => gruppo.prodotti.length > 0)
-  }, [gruppi, ricerca, filtroStato, ordinamento, soglie])
+      .filter((gruppo: any) => gruppo.prodotti.length > 0);
+  }, [gruppi, ricerca, filtroStato, ordinamento, soglie]);
 
   function riepilogoGruppo(gruppo: any) {
     const sotto = gruppo.prodotti.filter(
-      (p: any) => statoSoglia(p) === "Sotto soglia"
-    ).length
+      (p: any) => statoSoglia(p) === "Sotto soglia",
+    ).length;
 
     const corretto = gruppo.prodotti.filter(
-      (p: any) => statoSoglia(p) === "Corretto"
-    ).length
+      (p: any) => statoSoglia(p) === "Corretto",
+    ).length;
 
     const sopra = gruppo.prodotti.filter(
-      (p: any) => statoSoglia(p) === "Sopra soglia"
-    ).length
+      (p: any) => statoSoglia(p) === "Sopra soglia",
+    ).length;
 
-    return { sotto, corretto, sopra }
+    return { sotto, corretto, sopra };
   }
 
   return (
@@ -423,7 +530,7 @@ export default function StoricoGiacenze() {
             )}
 
             {gruppiFiltrati.map((gruppo: any) => {
-              const riepilogo = riepilogoGruppo(gruppo)
+              const riepilogo = riepilogoGruppo(gruppo);
 
               return (
                 <div
@@ -434,7 +541,7 @@ export default function StoricoGiacenze() {
                     <button
                       onClick={() =>
                         setGruppoAperto(
-                          gruppoAperto === gruppo.id ? null : gruppo.id
+                          gruppoAperto === gruppo.id ? null : gruppo.id,
                         )
                       }
                       className="text-left"
@@ -444,7 +551,7 @@ export default function StoricoGiacenze() {
                       </h3>
 
                       <p className="mt-1 text-sm font-semibold text-slate-700">
-                        Responsabile: {gruppo.responsabile}
+                        👤 {gruppo.responsabile}
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -475,7 +582,7 @@ export default function StoricoGiacenze() {
                       <button
                         onClick={() =>
                           setGruppoAperto(
-                            gruppoAperto === gruppo.id ? null : gruppo.id
+                            gruppoAperto === gruppo.id ? null : gruppo.id,
                           )
                         }
                         className="h-12 rounded-xl bg-slate-950 text-sm font-black text-white"
@@ -488,8 +595,8 @@ export default function StoricoGiacenze() {
                   {gruppoAperto === gruppo.id && (
                     <div className="space-y-3 border-t border-slate-100 bg-slate-50 p-3">
                       {gruppo.prodotti.map((item: any, index: number) => {
-                        const soglia = getSoglia(item.nome_prodotto)
-                        const stato = statoSoglia(item)
+                        const soglia = getSoglia(item.nome_prodotto);
+                        const stato = statoSoglia(item);
 
                         return (
                           <div
@@ -516,7 +623,7 @@ export default function StoricoGiacenze() {
 
                               <span
                                 className={`rounded-lg px-3 py-1 text-xs font-black ${classeStato(
-                                  stato
+                                  stato,
                                 )}`}
                               >
                                 {stato}
@@ -526,7 +633,7 @@ export default function StoricoGiacenze() {
                             <p className="mt-3 text-xs font-semibold text-slate-500">
                               {item.created_at
                                 ? new Date(item.created_at).toLocaleString(
-                                    "it-IT"
+                                    "it-IT",
                                   )
                                 : "-"}
                             </p>
@@ -543,7 +650,7 @@ export default function StoricoGiacenze() {
                               />
                             )}
                           </div>
-                        )
+                        );
                       })}
 
                       {isAdmin && modificaAperta === gruppo.id && (
@@ -568,11 +675,11 @@ export default function StoricoGiacenze() {
                     </div>
                   )}
                 </div>
-              )
+              );
             })}
           </section>
         )}
       </div>
     </main>
-  )
+  );
 }

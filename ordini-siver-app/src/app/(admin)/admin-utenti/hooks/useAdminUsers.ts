@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { supabase } from "@/lib/supabase"
 import type {
   Locale,
   ModificaUtenteForm,
@@ -9,9 +10,18 @@ import type {
   UtenteLocale,
 } from "../types"
 
+async function getAuthHeaders(extra: Record<string, string> = {}) {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+
+  return {
+    ...extra,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
 async function leggiJsonSicuro(res: Response) {
   const text = await res.text()
-
   if (!text) return {}
 
   try {
@@ -39,13 +49,11 @@ export function useAdminUsers() {
     try {
       const res = await fetch("/api/admin/local-users", {
         cache: "no-store",
+        headers: await getAuthHeaders(),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore caricamento utenti")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore caricamento utenti")
 
       setLocali(json.locali || [])
       setUtenti(json.utenti || [])
@@ -64,17 +72,12 @@ export function useAdminUsers() {
     try {
       const res = await fetch("/api/admin/local-users", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(form),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore creazione utente")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore creazione utente")
 
       setMessaggio("Utente creato correttamente.")
       await caricaDati()
@@ -95,17 +98,12 @@ export function useAdminUsers() {
     try {
       const res = await fetch(`/api/admin/local-users/${userId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(form),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore aggiornamento utente")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore aggiornamento utente")
 
       setMessaggio("Utente aggiornato correttamente.")
       await caricaDati()
@@ -126,19 +124,12 @@ export function useAdminUsers() {
     try {
       const res = await fetch(`/api/admin/local-users/${userId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          active,
-        }),
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ active }),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore aggiornamento stato")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore aggiornamento stato")
 
       setMessaggio(active ? "Utente attivato." : "Utente disattivato.")
       await caricaDati()
@@ -159,19 +150,12 @@ export function useAdminUsers() {
     try {
       const res = await fetch(`/api/admin/local-users/${userId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          password,
-        }),
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ password }),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore reset password")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore reset password")
 
       setMessaggio("Password aggiornata correttamente.")
       await caricaDati()
@@ -192,13 +176,11 @@ export function useAdminUsers() {
     try {
       const res = await fetch(`/api/admin/local-users/${userId}`, {
         method: "DELETE",
+        headers: await getAuthHeaders(),
       })
 
       const json = await leggiJsonSicuro(res)
-
-      if (!res.ok) {
-        throw new Error(json.error || "Errore eliminazione utente")
-      }
+      if (!res.ok) throw new Error(json.error || "Errore eliminazione utente")
 
       setMessaggio("Utente eliminato correttamente.")
       await caricaDati()
@@ -235,17 +217,13 @@ export function useAdminUsers() {
   }, [utenti, ricerca, filtroLocale])
 
   const statistiche: StatisticheUtenti = useMemo(() => {
-    const attivi = utenti.filter((u) => u.active).length
-    const disattivati = utenti.filter((u) => !u.active).length
-    const localiCoperti = new Set(
-      utenti.filter((u) => u.locale_id).map((u) => u.locale_id)
-    ).size
-
     return {
       totali: utenti.length,
-      attivi,
-      disattivati,
-      localiCoperti,
+      attivi: utenti.filter((u) => u.active).length,
+      disattivati: utenti.filter((u) => !u.active).length,
+      localiCoperti: new Set(
+        utenti.filter((u) => u.locale_id).map((u) => u.locale_id)
+      ).size,
     }
   }, [utenti])
 

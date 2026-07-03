@@ -24,17 +24,12 @@ export default function DataTable<T>({
   emptyDescription,
 }: DataTableProps<T>) {
   if (data.length === 0) {
-    return (
-      <EmptyState
-        title={emptyTitle}
-        description={emptyDescription}
-      />
-    )
+    return <EmptyState title={emptyTitle} description={emptyDescription} />
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-x-auto overflow-y-visible">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-600">
             <tr>

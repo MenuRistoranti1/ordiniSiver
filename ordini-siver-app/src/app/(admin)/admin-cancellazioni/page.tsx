@@ -15,11 +15,6 @@ export default function AdminCancellazioni() {
   const [selezionato, setSelezionato] = useState<any>(null)
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     caricaLocali()
 
     const oggi = new Date()

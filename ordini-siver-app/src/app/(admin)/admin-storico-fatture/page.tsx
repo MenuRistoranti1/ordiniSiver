@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
-  ArrowLeft,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -64,11 +63,6 @@ export default function AdminStoricoFatture() {
   const [fatturaAperta, setFatturaAperta] = useState<string>("")
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     const oggi = new Date()
     const primo = new Date(oggi.getFullYear(), oggi.getMonth(), 1)
 
@@ -216,52 +210,19 @@ export default function AdminStoricoFatture() {
     setFatturaAperta((attuale) => (attuale === id ? "" : id))
   }
 
-  function tornaDashboard() {
-    window.location.href = "/admin-dashboard"
-  }
-
-  async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("admin")
-    localStorage.removeItem("admin_mode")
-    window.location.href = "/admin"
-  }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 pb-10 pt-4 sm:px-5 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-xl font-black tracking-tight sm:text-3xl">
-                Storico fatture
-              </h1>
+    <div className="w-full max-w-full space-y-4 overflow-hidden">
+      <section className="mb-1">
+        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+          Storico fatture
+        </h1>
+        <p className="mt-1 text-sm font-bold text-slate-600">
+          Archivio fatture importate, righe prodotto e anomalie
+        </p>
+      </section>
 
-              <p className="mt-1 text-sm font-bold text-slate-300">
-                Archivio fatture importate, righe prodotto e anomalie
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <button
-                onClick={tornaDashboard}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Dashboard
-              </button>
-
-              <button
-                onClick={logout}
-                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase text-slate-500">
               Fatture
@@ -303,8 +264,8 @@ export default function AdminStoricoFatture() {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[160px_160px_1fr_220px_160px]">
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[150px_150px_minmax(220px,1fr)_220px_150px]">
             <div className="relative">
               <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -352,7 +313,7 @@ export default function AdminStoricoFatture() {
             <button
               onClick={caricaDati}
               disabled={loading}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:bg-slate-400"
+              className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white disabled:bg-slate-400"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Aggiorna
@@ -416,7 +377,7 @@ export default function AdminStoricoFatture() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[520px]">
+                      <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:w-[520px] lg:max-w-full">
                         <div className="rounded-xl bg-slate-50 p-2">
                           <p className="text-[11px] font-black uppercase text-slate-500">
                             Totale
@@ -538,7 +499,6 @@ export default function AdminStoricoFatture() {
             )}
           </section>
         )}
-      </div>
-    </main>
+    </div>
   )
 }

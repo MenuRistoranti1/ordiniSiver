@@ -25,24 +25,56 @@ export default function EditUserModal({
     utente: "",
     locale_id: "",
     active: true,
+    locali_assegnati: [],
   })
 
   useEffect(() => {
     if (!utente) return
 
+    const assegnati =
+      utente.locali_assegnati && utente.locali_assegnati.length > 0
+        ? utente.locali_assegnati
+        : utente.locale_id
+          ? [utente.locale_id]
+          : []
+
     setForm({
       nome: utente.nome || "",
       cognome: utente.cognome || "",
       utente: utente.utente || "",
-      locale_id: utente.locale_id || "",
+      locale_id: utente.locale_id || assegnati[0] || "",
       active: Boolean(utente.active),
+      locali_assegnati: assegnati,
     })
   }, [utente])
+
+  function toggleLocale(localeId: string) {
+    const presente = form.locali_assegnati.includes(localeId)
+
+    const nuovi = presente
+      ? form.locali_assegnati.filter((id) => id !== localeId)
+      : [...form.locali_assegnati, localeId]
+
+    setForm({
+      ...form,
+      locali_assegnati: nuovi,
+      locale_id: nuovi.includes(form.locale_id)
+        ? form.locale_id
+        : nuovi[0] || "",
+    })
+  }
 
   async function salva() {
     if (!utente) return
 
-    const ok = await onSave(utente.id, form)
+    const localePrincipale =
+      form.locale_id || form.locali_assegnati[0] || ""
+
+    const ok = await onSave(utente.id, {
+      ...form,
+      locale_id: localePrincipale,
+      locali_assegnati: form.locali_assegnati,
+    })
 
     if (ok) {
       onClose()
@@ -84,18 +116,65 @@ export default function EditUserModal({
           className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
         />
 
-        <select
-          value={form.locale_id}
-          onChange={(e) => setForm({ ...form, locale_id: e.target.value })}
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-600"
-        >
-          <option value="">Nessun locale</option>
-          {locali.map((locale) => (
-            <option key={locale.id} value={locale.id}>
-              {locale.name}
-            </option>
-          ))}
-        </select>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-3">
+            <h3 className="text-sm font-black text-slate-900">
+              Locali assegnati
+            </h3>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              Puoi assegnare lo stesso utente a uno o più locali.
+            </p>
+          </div>
+
+          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {locali.map((locale) => {
+              const checked = form.locali_assegnati.includes(locale.id)
+              const principale = form.locale_id === locale.id
+
+              return (
+                <div
+                  key={locale.id}
+                  className={`rounded-xl border p-3 ${
+                    checked
+                      ? "border-blue-200 bg-blue-50"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleLocale(locale.id)}
+                      className="h-4 w-4"
+                    />
+
+                    <span className="flex-1 text-sm font-black text-slate-800">
+                      {locale.name}
+                    </span>
+                  </label>
+
+                  {checked && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({ ...form, locale_id: locale.id })
+                      }
+                      className={`mt-2 rounded-lg px-3 py-1.5 text-xs font-black ${
+                        principale
+                          ? "bg-blue-600 text-white"
+                          : "bg-white text-slate-700 ring-1 ring-slate-200"
+                      }`}
+                    >
+                      {principale
+                        ? "Locale principale"
+                        : "Imposta come principale"}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
 
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <input

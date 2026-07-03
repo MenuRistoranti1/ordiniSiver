@@ -11,9 +11,21 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, serviceRoleKey)
 }
 
-export async function GET() {
+
+async function verificaAdmin(req: Request, supabaseAdmin: ReturnType<typeof getSupabaseAdmin>) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+  const { data, error } = await supabaseAdmin.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
+export async function GET(req: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
 
     const { data, error } = await supabaseAdmin
       .from("units")
@@ -41,6 +53,11 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin()
+
+    if (!(await verificaAdmin(req, supabaseAdmin))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const body = await req.json()
 
     const code = String(body.code || "").trim().toUpperCase()

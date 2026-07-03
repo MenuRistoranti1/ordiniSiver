@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   Bell,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Home,
   MessageCircle,
@@ -15,70 +15,154 @@ import {
   ShoppingCart,
   TrendingUp,
   Warehouse,
-} from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { useToast } from "@/components/Toast"
-import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
+} from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/Toast";
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader";
 
 type TopItem = {
-  nome: string
-  quantita: number
-}
+  nome: string;
+  quantita: number;
+};
+
+type GiacenzeInfo = {
+  compilati: number;
+  totale: number;
+  percentuale: number;
+  completa: boolean;
+};
+
+type LocaleScelta = {
+  restaurant_id: string;
+  restaurant_name: string;
+  role?: string | null;
+};
 
 export default function Dashboard() {
-  const { showToast } = useToast()
+  const { showToast } = useToast();
 
-  const [localeNome, setLocaleNome] = useState("")
-  const [localeId, setLocaleId] = useState("")
+  const [localeNome, setLocaleNome] = useState("");
+  const [localeId, setLocaleId] = useState("");
+  const [utenteNome, setUtenteNome] = useState("");
+  const [localiDisponibili, setLocaliDisponibili] = useState<LocaleScelta[]>([]);
+  const [selectorAperto, setSelectorAperto] = useState(false);
 
-  const [giacenzeOk, setGiacenzeOk] = useState(false)
-  const [messaggiNonLetti, setMessaggiNonLetti] = useState(0)
-  const [topOrdinati, setTopOrdinati] = useState<TopItem[]>([])
-  const [topRotti, setTopRotti] = useState<TopItem[]>([])
-  const [totaleOrdini, setTotaleOrdini] = useState(0)
-  const [totaleRotture, setTotaleRotture] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [giacenzeInfo, setGiacenzeInfo] = useState<GiacenzeInfo>({
+    compilati: 0,
+    totale: 0,
+    percentuale: 0,
+    completa: false,
+  });
+
+  const giacenzeOk = giacenzeInfo.completa;
+
+  const [messaggiNonLetti, setMessaggiNonLetti] = useState(0);
+  const [topOrdinati, setTopOrdinati] = useState<TopItem[]>([]);
+  const [topRotti, setTopRotti] = useState<TopItem[]>([]);
+  const [totaleOrdini, setTotaleOrdini] = useState(0);
+  const [totaleRotture, setTotaleRotture] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    inizializzaDashboard()
-  }, [])
+    inizializzaDashboard();
+  }, []);
 
   async function inizializzaDashboard() {
-    setLoading(true)
+    setLoading(true);
 
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (error || !user) {
-      window.location.href = "/"
-      return
+      window.location.href = "/";
+      return;
     }
 
-    const ruolo = user.app_metadata?.role
+    const ruolo = user.app_metadata?.role;
 
     if (ruolo !== "locale") {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
+      await supabase.auth.signOut();
+      window.location.href = "/";
+      return;
     }
 
-    const id = String(user.app_metadata?.locale_id || "")
-    const nome = String(user.app_metadata?.locale_nome || "")
+    setUtenteNome(ricavaNomeUtente(user));
+
+    const locali = await caricaLocaliUtente(user);
+    setLocaliDisponibili(locali);
+
+    let id = localStorage.getItem("locale_id") || "";
+    let nome = localStorage.getItem("locale_nome") || "";
+
+    const localeSalvatoValido = locali.some(
+      (locale) => String(locale.restaurant_id) === String(id)
+    );
+
+    if ((!id || !nome || !localeSalvatoValido) && locali.length === 1) {
+      id = String(locali[0].restaurant_id);
+      nome = String(locali[0].restaurant_name);
+      localStorage.setItem("locale_id", id);
+      localStorage.setItem("locale_nome", nome);
+      localStorage.setItem("locale_scelto", "true");
+    }
+
+    if ((!id || !nome || !localeSalvatoValido) && locali.length > 1) {
+      window.location.href = "/";
+      return;
+    }
 
     if (!id || !nome) {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
+      window.location.href = "/";
+      return;
     }
 
-    setLocaleId(id)
-    setLocaleNome(nome)
+    setLocaleId(id);
+    setLocaleNome(nome);
 
-    await caricaTutto(id, false)
+    await caricaTutto(id, false);
 
-    setLoading(false)
+    setLoading(false);
+  }
+
+  async function caricaLocaliUtente(user: any) {
+    const { data, error } = await supabase
+      .from("local_user_restaurants")
+      .select("restaurant_id, restaurant_name, role")
+      .eq("user_id", user.id)
+      .order("restaurant_name", { ascending: true });
+
+    if (!error && data && data.length > 0) {
+      return data as LocaleScelta[];
+    }
+
+    const id = user.app_metadata?.locale_id;
+    const nome = user.app_metadata?.locale_nome;
+
+    if (id && nome) {
+      return [
+        {
+          restaurant_id: String(id),
+          restaurant_name: String(nome),
+          role: "responsabile",
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  function cambiaLocale(locale: LocaleScelta) {
+    localStorage.setItem("locale_id", String(locale.restaurant_id));
+    localStorage.setItem("locale_nome", String(locale.restaurant_name));
+    localStorage.setItem("locale_scelto", "true");
+
+    setLocaleId(String(locale.restaurant_id));
+    setLocaleNome(String(locale.restaurant_name));
+    setSelectorAperto(false);
+
+    caricaTutto(String(locale.restaurant_id), true);
   }
 
   async function caricaNomeLocale(id: string) {
@@ -86,39 +170,115 @@ export default function Dashboard() {
       .from("restaurants")
       .select("name")
       .eq("id", id)
-      .single()
+      .single();
 
     if (error) {
-      console.log(error)
-      setLocaleNome("Locale")
-      return
+      console.log(error);
+      setLocaleNome("Locale");
+      return;
     }
 
-    setLocaleNome(data?.name || "Locale")
+    const nomeAggiornato = data?.name || "Locale";
+    setLocaleNome(nomeAggiornato);
+    localStorage.setItem("locale_nome", nomeAggiornato);
   }
 
-  function getInizioSettimanaIso() {
-    const oggi = new Date()
-    const giorno = oggi.getDay()
-    const diff = giorno === 0 ? -6 : 1 - giorno
-    const lunedi = new Date(oggi)
+  function ricavaNomeUtente(user: any) {
+    const valoreDiretto = String(
+      user.app_metadata?.full_name ||
+        user.app_metadata?.name ||
+        user.app_metadata?.display_name ||
+        user.app_metadata?.nome ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.display_name ||
+        user.user_metadata?.nome ||
+        "",
+    ).trim();
 
-    lunedi.setDate(oggi.getDate() + diff)
-    lunedi.setHours(0, 0, 0, 0)
+    if (valoreDiretto && !valoreDiretto.includes("@")) {
+      return valoreDiretto;
+    }
 
-    return lunedi.toISOString().split("T")[0]
+    const email = String(user.email || "").trim();
+    const parteLocale = email.split("@")[0] || "";
+
+    if (!parteLocale) return "";
+
+    const pulito = parteLocale
+      .replace(/^[a-z]\.?([a-z]{3,})$/i, "$1")
+      .replace(/[._-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!pulito) return "";
+
+    return pulito
+      .split(" ")
+      .map(
+        (parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLowerCase(),
+      )
+      .join(" ");
+  }
+
+  function salutoOrario() {
+    const ora = new Date().getHours();
+
+    if (ora >= 5 && ora < 13) return "Buongiorno";
+    if (ora >= 13 && ora < 18) return "Buon pomeriggio";
+    return "Buonasera";
+  }
+
+  function sabatoCorrente() {
+    const oggi = new Date();
+    const giorno = oggi.getDay();
+    const diff = giorno >= 6 ? giorno - 6 : giorno + 1;
+    const sabato = new Date(oggi);
+
+    sabato.setDate(oggi.getDate() - diff);
+    sabato.setHours(0, 0, 0, 0);
+
+    return sabato;
+  }
+
+  function getSettimanaKey() {
+    return sabatoCorrente().toISOString().split("T")[0];
   }
 
   async function controllaGiacenze(id: string) {
-    const dataISO = getInizioSettimanaIso()
+    const settimanaKey = getSettimanaKey();
 
-    const { data } = await supabase
-      .from("giacenze_settimana")
-      .select("id")
-      .eq("locale_id", id)
-      .gte("data_inserimento", dataISO)
+    const [{ data: prodottiAttivi }, { data: giacenzeSettimana }] =
+      await Promise.all([
+        supabase
+          .from("restaurant_product_settings")
+          .select("id, active, prodotto_id, product_id")
+          .eq("restaurant_id", id)
+          .eq("active", true),
+        supabase
+          .from("giacenze_settimana")
+          .select("id, quantita")
+          .eq("locale_id", id)
+          .eq("settimana_key", settimanaKey),
+      ]);
 
-    setGiacenzeOk((data || []).length > 0)
+    const totale = (prodottiAttivi || []).filter(
+      (item: any) => item.prodotto_id || item.product_id,
+    ).length;
+
+    const compilati = (giacenzeSettimana || []).filter(
+      (item: any) => Number(item.quantita || 0) > 0,
+    ).length;
+
+    const percentuale =
+      totale > 0 ? Math.min(100, Math.round((compilati / totale) * 100)) : 0;
+
+    setGiacenzeInfo({
+      compilati,
+      totale,
+      percentuale,
+      completa: totale > 0 && percentuale >= 90,
+    });
   }
 
   async function caricaMessaggiNonLetti(id: string) {
@@ -127,158 +287,180 @@ export default function Dashboard() {
       .select("id")
       .eq("locale_id", id)
       .eq("sender", "admin")
-      .eq("is_read", false)
+      .eq("is_read", false);
 
-    setMessaggiNonLetti((data || []).length)
+    setMessaggiNonLetti((data || []).length);
   }
 
   async function caricaStatisticheLocale(id: string) {
-    const oggi = new Date()
+    const oggi = new Date();
     const primoMese = new Date(oggi.getFullYear(), oggi.getMonth(), 1)
       .toISOString()
-      .split("T")[0]
+      .split("T")[0];
 
-    const oggiIso = oggi.toISOString().split("T")[0]
+    const oggiIso = oggi.toISOString().split("T")[0];
 
     const { data: ordiniData } = await supabase
       .from("ordini")
       .select("*")
       .eq("locale_id", id)
       .gte("settimana_key", primoMese)
-      .lte("settimana_key", oggiIso)
+      .lte("settimana_key", oggiIso);
 
-    setTotaleOrdini((ordiniData || []).length)
+    setTotaleOrdini((ordiniData || []).length);
 
-    const ordinati: Record<string, TopItem> = {}
+    const ordinati: Record<string, TopItem> = {};
 
-    ;(ordiniData || []).forEach((ordine: any) => {
-      const nome = ordine.nome_prodotto || "Prodotto"
+    (ordiniData || []).forEach((ordine: any) => {
+      const nome = ordine.nome_prodotto || "Prodotto";
 
       if (!ordinati[nome]) {
         ordinati[nome] = {
           nome,
           quantita: 0,
-        }
+        };
       }
 
-      ordinati[nome].quantita += Number(ordine.quantita || 0)
-    })
+      ordinati[nome].quantita += Number(ordine.quantita || 0);
+    });
 
     setTopOrdinati(
       Object.values(ordinati)
         .sort((a, b) => b.quantita - a.quantita)
-        .slice(0, 5)
-    )
+        .slice(0, 5),
+    );
 
     const { data: giacenzeData } = await supabase
       .from("giacenze_settimana")
       .select("*")
       .eq("locale_id", id)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (!giacenzeData || giacenzeData.length < 2) {
-      setTopRotti([])
-      setTotaleRotture(0)
-      return
+      setTopRotti([]);
+      setTotaleRotture(0);
+      return;
     }
 
-    const primaData = giacenzeData[0].created_at?.split("T")[0]
+    const primaData = giacenzeData[0].created_at?.split("T")[0];
     const ultimaData =
-      giacenzeData[giacenzeData.length - 1].created_at?.split("T")[0]
+      giacenzeData[giacenzeData.length - 1].created_at?.split("T")[0];
 
     const primaGiacenza = giacenzeData.filter(
-      (g: any) => g.created_at?.split("T")[0] === primaData
-    )
+      (g: any) => g.created_at?.split("T")[0] === primaData,
+    );
 
     const ultimaGiacenza = giacenzeData.filter(
-      (g: any) => g.created_at?.split("T")[0] === ultimaData
-    )
+      (g: any) => g.created_at?.split("T")[0] === ultimaData,
+    );
 
-    const rotti: Record<string, TopItem> = {}
+    const rotti: Record<string, TopItem> = {};
 
     ultimaGiacenza.forEach((ultima: any) => {
       const prima = primaGiacenza.find(
-        (p: any) => p.nome_prodotto === ultima.nome_prodotto
-      )
+        (p: any) => p.nome_prodotto === ultima.nome_prodotto,
+      );
 
-      if (!prima) return
+      if (!prima) return;
 
       const consegnatoTotale = (ordiniData || [])
         .filter((o: any) => o.nome_prodotto === ultima.nome_prodotto)
         .reduce(
           (sum: number, o: any) => sum + Number(o.quantita_consegnata || 0),
-          0
-        )
+          0,
+        );
 
       const totaleRotto =
         Number(prima.quantita || 0) +
         consegnatoTotale -
-        Number(ultima.quantita || 0)
+        Number(ultima.quantita || 0);
 
       if (totaleRotto > 0) {
         rotti[ultima.nome_prodotto] = {
           nome: ultima.nome_prodotto,
           quantita: totaleRotto,
-        }
+        };
       }
-    })
+    });
 
     const rottiArray = Object.values(rotti)
       .sort((a, b) => b.quantita - a.quantita)
-      .slice(0, 5)
+      .slice(0, 5);
 
-    setTopRotti(rottiArray)
-    setTotaleRotture(rottiArray.reduce((sum, item) => sum + item.quantita, 0))
+    setTopRotti(rottiArray);
+    setTotaleRotture(rottiArray.reduce((sum, item) => sum + item.quantita, 0));
   }
 
   async function caricaTutto(id: string, mostraMessaggio = true) {
-    if (!id) return
+    if (!id) return;
 
-    setLoading(true)
+    setLoading(true);
 
     await Promise.all([
       caricaNomeLocale(id),
       controllaGiacenze(id),
       caricaMessaggiNonLetti(id),
       caricaStatisticheLocale(id),
-    ])
+    ]);
 
-    setLoading(false)
+    setLoading(false);
 
     if (mostraMessaggio) {
-      showToast("Dashboard aggiornata", "success")
+      showToast("Dashboard aggiornata", "success");
     }
   }
 
   async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("locale_id")
-    localStorage.removeItem("locale_nome")
-    localStorage.removeItem("restaurant_name")
-    window.location.href = "/"
+    await supabase.auth.signOut();
+
+    localStorage.removeItem("locale_id");
+    localStorage.removeItem("locale_nome");
+    localStorage.removeItem("restaurant_name");
+    localStorage.removeItem("locale_scelto");
+
+    window.location.href = "/";
   }
 
   function vai(percorso: string) {
-    window.location.href = percorso
+    window.location.href = percorso;
   }
 
   function vaiNuovoOrdine() {
     if (giacenzeOk) {
-      vai("/nuovo-ordine")
-      return
+      vai("/nuovo-ordine");
+      return;
     }
 
-    showToast("Prima devi compilare le giacenze della settimana", "warning")
+    showToast("Prima devi compilare le giacenze della settimana", "warning");
   }
 
   const statoOperativo = useMemo(() => {
-    if (!giacenzeOk) {
+    if (giacenzeInfo.totale === 0) {
       return {
-        titolo: "Giacenze da completare",
-        testo: "Il nuovo ordine è bloccato finché non vengono inserite le giacenze settimanali.",
+        titolo: "Prodotti non configurati",
+        testo: "Non risultano prodotti attivi configurati per questo locale.",
         classe: "border-amber-300 bg-amber-50 text-amber-900",
         icona: AlertTriangle,
-      }
+      };
+    }
+
+    if (giacenzeInfo.compilati === 0) {
+      return {
+        titolo: "Giacenze da completare",
+        testo:
+          "Il nuovo ordine è bloccato finché non vengono inserite le giacenze settimanali.",
+        classe: "border-amber-300 bg-amber-50 text-amber-900",
+        icona: AlertTriangle,
+      };
+    }
+
+    if (!giacenzeInfo.completa) {
+      return {
+        titolo: "Attenzione: giacenze incomplete",
+        testo: `Hai compilato ${giacenzeInfo.compilati} prodotti su ${giacenzeInfo.totale}. Completa le giacenze prima di procedere.`,
+        classe: "border-amber-300 bg-amber-50 text-amber-900",
+        icona: AlertTriangle,
+      };
     }
 
     if (totaleRotture > 0) {
@@ -287,18 +469,19 @@ export default function Dashboard() {
         testo: "Sono presenti possibili rotture o dispersioni da verificare.",
         classe: "border-red-300 bg-red-50 text-red-900",
         icona: AlertTriangle,
-      }
+      };
     }
 
     return {
       titolo: "Operatività regolare",
-      testo: "Giacenze presenti e nessuna dispersione rilevante nei dati calcolati.",
+      testo:
+        "Giacenze complete e nessuna dispersione rilevante nei dati calcolati.",
       classe: "border-green-300 bg-green-50 text-green-900",
       icona: CheckCircle2,
-    }
-  }, [giacenzeOk, totaleRotture])
+    };
+  }, [giacenzeInfo, totaleRotture]);
 
-  const StatoIcon = statoOperativo.icona
+  const StatoIcon = statoOperativo.icona;
 
   function SidebarButton({
     label,
@@ -307,11 +490,11 @@ export default function Dashboard() {
     icon: Icon,
     badge,
   }: {
-    label: string
-    active?: boolean
-    onClick: () => void
-    icon: any
-    badge?: number
+    label: string;
+    active?: boolean;
+    onClick: () => void;
+    icon: any;
+    badge?: number;
   }) {
     return (
       <button
@@ -333,7 +516,7 @@ export default function Dashboard() {
           </span>
         )}
       </button>
-    )
+    );
   }
 
   function KpiCard({
@@ -343,11 +526,11 @@ export default function Dashboard() {
     icon: Icon,
     color,
   }: {
-    label: string
-    value: string | number
-    note: string
-    icon: any
-    color: string
+    label: string;
+    value: string | number;
+    note: string;
+    icon: any;
+    color: string;
   }) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-200">
@@ -356,9 +539,7 @@ export default function Dashboard() {
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
               {label}
             </p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950">
-              {value}
-            </h2>
+            <h2 className="mt-2 text-3xl font-black text-slate-950">{value}</h2>
             <p className="mt-1 text-xs font-bold text-slate-500">{note}</p>
           </div>
 
@@ -369,7 +550,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   function TopList({
@@ -379,11 +560,11 @@ export default function Dashboard() {
     empty,
     danger,
   }: {
-    title: string
-    subtitle: string
-    items: TopItem[]
-    empty: string
-    danger?: boolean
+    title: string;
+    subtitle: string;
+    items: TopItem[];
+    empty: string;
+    danger?: boolean;
   }) {
     return (
       <section
@@ -450,18 +631,56 @@ export default function Dashboard() {
           ))}
         </div>
       </section>
-    )
+    );
   }
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-100">
       <div className="flex min-h-screen w-full">
         <aside className="fixed left-0 top-0 hidden h-screen w-72 shrink-0 flex-col bg-slate-950 p-5 text-white lg:flex">
-          <div className="mb-6 rounded-3xl bg-slate-900 p-4">
+          <div className="mb-4 rounded-3xl bg-slate-900 p-4">
             <h1 className="text-2xl font-black tracking-tight">OrdiniSiver</h1>
-            <p className="mt-1 text-xs font-bold text-slate-300">
-              Area Locale
+            <p className="mt-1 text-xs font-bold text-slate-300">Area Locale</p>
+          </div>
+
+          <div className="mb-5 rounded-3xl bg-slate-900 p-3">
+            <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
+              Locale attivo
             </p>
+
+            {localiDisponibili.length > 1 ? (
+              <div className="relative">
+                <button
+                  onClick={() => setSelectorAperto((value) => !value)}
+                  className="flex w-full items-center justify-between gap-2 rounded-2xl bg-slate-800 px-3 py-3 text-left text-sm font-black text-white hover:bg-slate-700"
+                >
+                  <span className="truncate">{localeNome || "Seleziona locale"}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0" />
+                </button>
+
+                {selectorAperto && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-white text-slate-950 shadow-2xl">
+                    {localiDisponibili.map((locale) => (
+                      <button
+                        key={locale.restaurant_id}
+                        onClick={() => cambiaLocale(locale)}
+                        className={`w-full px-4 py-3 text-left text-sm font-black hover:bg-blue-50 ${
+                          String(locale.restaurant_id) === String(localeId)
+                            ? "bg-blue-600 text-white hover:bg-blue-600"
+                            : ""
+                        }`}
+                      >
+                        {locale.restaurant_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-slate-800 px-3 py-3 text-sm font-black text-white">
+                {localeNome || "Locale"}
+              </div>
+            )}
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto pr-1">
@@ -524,11 +743,14 @@ export default function Dashboard() {
                   <p className="text-xs font-black uppercase tracking-wide text-blue-600">
                     Dashboard locale
                   </p>
-                  <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                    {localeNome || "Caricamento..."}
+                  <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                    {utenteNome
+                      ? `${salutoOrario()}, ${utenteNome}`
+                      : salutoOrario()}
                   </h1>
                   <p className="mt-1 text-sm font-bold text-slate-500">
-                    Stato ordini, giacenze, messaggi e dispersioni
+                    {localeNome || "Caricamento..."} · Stato ordini, giacenze,
+                    messaggi e dispersioni
                   </p>
                 </div>
 
@@ -575,11 +797,37 @@ export default function Dashboard() {
               </div>
             </section>
 
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Avanzamento giacenze
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    {giacenzeInfo.percentuale}%
+                  </h2>
+                  <p className="mt-1 text-sm font-bold text-slate-500">
+                    {giacenzeInfo.compilati} di {giacenzeInfo.totale} prodotti
+                    compilati
+                  </p>
+                </div>
+
+                <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100 sm:max-w-md">
+                  <div
+                    className={`h-full rounded-full ${
+                      giacenzeInfo.completa ? "bg-green-600" : "bg-amber-500"
+                    }`}
+                    style={{ width: `${giacenzeInfo.percentuale}%` }}
+                  />
+                </div>
+              </div>
+            </section>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <KpiCard
                 label="Stato giacenze"
-                value={giacenzeOk ? "Fatte" : "Da fare"}
-                note={giacenzeOk ? "Ordine disponibile" : "Ordine bloccato"}
+                value={`${giacenzeInfo.compilati}/${giacenzeInfo.totale}`}
+                note={`${giacenzeInfo.percentuale}% compilato`}
                 icon={giacenzeOk ? CheckCircle2 : AlertTriangle}
                 color={
                   giacenzeOk
@@ -659,7 +907,7 @@ export default function Dashboard() {
                 className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 ${
                   giacenzeOk
                     ? "border-slate-200 bg-white hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
-                    : "cursor-not-allowed border-slate-300 bg-slate-200"
+                    : "cursor-not-allowed border-amber-300 bg-amber-50"
                 }`}
               >
                 <p className="text-xs font-black uppercase tracking-wide text-blue-600">
@@ -723,5 +971,5 @@ export default function Dashboard() {
         </section>
       </div>
     </main>
-  )
+  );
 }

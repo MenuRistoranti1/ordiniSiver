@@ -7,8 +7,9 @@ import {
   Bell,
   CheckCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   FileText,
-  Home,
   Mail,
   Package,
   RefreshCw,
@@ -35,6 +36,58 @@ type AlertItem = {
   link?: string
 }
 
+type SezioneAlert = {
+  key: string
+  titolo: string
+  descrizione: string
+  gruppo?: AlertItem["gruppo"]
+  tipi?: string[]
+  colore: string
+  icon: any
+}
+
+const sezioni: SezioneAlert[] = [
+  {
+    key: "critici",
+    titolo: "Critici",
+    descrizione: "Alert ad alta priorità da controllare subito.",
+    colore: "bg-red-100 text-red-700",
+    icon: AlertTriangle,
+  },
+  {
+    key: "operativo",
+    titolo: "Operativo",
+    descrizione: "Giacenze, ordini, consegne e locali inattivi.",
+    gruppo: "operativo",
+    colore: "bg-amber-100 text-amber-700",
+    icon: Truck,
+  },
+  {
+    key: "fatture",
+    titolo: "Fatture",
+    descrizione: "Anomalie, righe non abbinate e quantità diverse.",
+    gruppo: "fatture",
+    colore: "bg-blue-100 text-blue-700",
+    icon: FileText,
+  },
+  {
+    key: "anagrafica",
+    titolo: "Anagrafica",
+    descrizione: "Prodotti senza codice, senza prezzo o codici sconosciuti.",
+    gruppo: "anagrafica",
+    colore: "bg-purple-100 text-purple-700",
+    icon: Tag,
+  },
+  {
+    key: "magazzino",
+    titolo: "Magazzino e consumi",
+    descrizione: "Soglie, prodotti a zero e consumi anomali.",
+    tipi: ["soglia", "anomalia", "inevaso"],
+    colore: "bg-emerald-100 text-emerald-700",
+    icon: Package,
+  },
+]
+
 export default function AdminAlert() {
   const [locali, setLocali] = useState<any[]>([])
   const [giacenze, setGiacenze] = useState<any[]>([])
@@ -47,16 +100,10 @@ export default function AdminAlert() {
 
   const [loading, setLoading] = useState(true)
   const [ricerca, setRicerca] = useState("")
-  const [filtroTipo, setFiltroTipo] = useState("tutti")
-  const [filtroGruppo, setFiltroGruppo] = useState("tutti")
+  const [sezioneAperta, setSezioneAperta] = useState("critici")
   const [errore, setErrore] = useState("")
 
   useEffect(() => {
-    if (localStorage.getItem("admin") !== "true") {
-      window.location.href = "/admin"
-      return
-    }
-
     caricaDati()
   }, [])
 
@@ -164,13 +211,6 @@ export default function AdminAlert() {
     }
 
     setLoading(false)
-  }
-
-  async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("admin")
-    localStorage.removeItem("admin_mode")
-    window.location.href = "/admin"
   }
 
   const invoicesById = useMemo(() => {
@@ -339,13 +379,16 @@ export default function AdminAlert() {
     })
 
     const prodottiInevasi: Record<string, any> = {}
+
     ordiniStorici.forEach((ordine) => {
       const ordinata = Number(ordine.quantita || 0)
       const consegnata = Number(ordine.quantita_consegnata || 0)
       const inevasa = Math.max(ordinata - consegnata, 0)
+
       if (inevasa <= 0) return
 
       const chiave = `${ordine.locale_nome}-${ordine.nome_prodotto}`
+
       if (!prodottiInevasi[chiave]) {
         prodottiInevasi[chiave] = {
           locale_nome: ordine.locale_nome,
@@ -354,6 +397,7 @@ export default function AdminAlert() {
           totale_inevaso: 0,
         }
       }
+
       prodottiInevasi[chiave].count += 1
       prodottiInevasi[chiave].totale_inevaso += inevasa
     })
@@ -375,6 +419,7 @@ export default function AdminAlert() {
 
     giacenze.forEach((g) => {
       const quantita = Number(g.quantita || 0)
+
       if (quantita <= 0) {
         lista.push({
           id: `sotto-soglia-${g.id}`,
@@ -393,6 +438,7 @@ export default function AdminAlert() {
 
     products.forEach((prodotto) => {
       if (prodotto.active === false) return
+
       const codice = normalizzaCodice(prodotto.supplier_code || "")
       const prezzo = numero(prodotto.price)
 
@@ -505,34 +551,60 @@ export default function AdminAlert() {
   ])
 
   const alertFiltrati = useMemo(() => {
-    let lista = [...alertCorrenti]
+    if (!ricerca.trim()) return alertCorrenti
 
-    if (filtroGruppo !== "tutti") lista = lista.filter((a) => a.gruppo === filtroGruppo)
-    if (filtroTipo !== "tutti") lista = lista.filter((a) => a.tipo === filtroTipo)
+    const q = ricerca.toLowerCase()
 
-    if (ricerca.trim()) {
-      const q = ricerca.toLowerCase()
-      lista = lista.filter((a) =>
-        [a.titolo, a.descrizione, a.locale_nome, a.email, a.settimana_key, a.tipo, a.gruppo]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q))
-      )
-    }
+    return alertCorrenti.filter((a) =>
+      [
+        a.titolo,
+        a.descrizione,
+        a.locale_nome,
+        a.email,
+        a.settimana_key,
+        a.tipo,
+        a.gruppo,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    )
+  }, [alertCorrenti, ricerca])
 
-    const pesoGravita: Record<string, number> = { alta: 0, media: 1, bassa: 2 }
-    return lista.sort((a, b) => pesoGravita[a.gravita] - pesoGravita[b.gravita])
-  }, [alertCorrenti, filtroTipo, filtroGruppo, ricerca])
+  const alertPerSezione = useMemo(() => {
+    const map = new Map<string, AlertItem[]>()
+
+    sezioni.forEach((sezione) => {
+      let items = [...alertFiltrati]
+
+      if (sezione.key === "critici") {
+        items = items.filter((a) => a.gravita === "alta")
+      } else if (sezione.gruppo) {
+        items = items.filter((a) => a.gruppo === sezione.gruppo)
+      } else if (sezione.tipi) {
+        items = items.filter((a) => sezione.tipi?.includes(a.tipo))
+      }
+
+      const pesoGravita: Record<string, number> = { alta: 0, media: 1, bassa: 2 }
+
+      items.sort((a, b) => pesoGravita[a.gravita] - pesoGravita[b.gravita])
+      map.set(sezione.key, items)
+    })
+
+    return map
+  }, [alertFiltrati])
 
   const logFiltrati = useMemo(() => {
-    if (!ricerca.trim()) return alertLog.slice(0, 20)
+    if (!ricerca.trim()) return alertLog.slice(0, 10)
+
     const q = ricerca.toLowerCase()
+
     return alertLog
       .filter((a) =>
         [a.locale_nome, a.email, a.tipo_alert, a.settimana_key, a.errore]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q))
       )
-      .slice(0, 20)
+      .slice(0, 10)
   }, [alertLog, ricerca])
 
   const conteggi = useMemo(() => {
@@ -542,8 +614,9 @@ export default function AdminAlert() {
       operativo: alertCorrenti.filter((a) => a.gruppo === "operativo").length,
       fatture: alertCorrenti.filter((a) => a.gruppo === "fatture").length,
       anagrafica: alertCorrenti.filter((a) => a.gruppo === "anagrafica").length,
-      magazzino: alertCorrenti.filter((a) => a.gruppo === "magazzino").length,
-      consumi: alertCorrenti.filter((a) => a.gruppo === "consumi").length,
+      magazzino:
+        alertCorrenti.filter((a) => a.gruppo === "magazzino").length +
+        alertCorrenti.filter((a) => a.gruppo === "consumi").length,
     }
   }, [alertCorrenti])
 
@@ -581,38 +654,100 @@ export default function AdminAlert() {
     const conferma = window.confirm(
       "Vuoi eseguire ora il controllo email per ordini/giacenze mancanti?"
     )
+
     if (!conferma) return
 
-    const res = await fetch("/api/check-missing-orders")
-    const json = await res.json()
-    console.log("RISULTATO ALERT EMAIL:", json)
-    alert("Controllo completato.")
-    caricaDati()
-  }
+   const { data } = await supabase.auth.getSession()
+const token = data.session?.access_token
 
-  function KpiCard({
+const res = await fetch("/api/check-missing-orders", {
+  headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+})
+
+const json = await res.json()
+
+if (!res.ok) {
+  throw new Error(json.error || "Errore controllo alert")
+}
+
+console.log("RISULTATO ALERT EMAIL:", json)
+alert("Controllo completato.")
+caricaDati()
+  }
+  function CardConteggio({
     titolo,
     valore,
     descrizione,
     icon: Icon,
     colore,
+    active,
+    onClick,
   }: {
     titolo: string
     valore: number | string
     descrizione: string
     icon: any
     colore: string
+    active?: boolean
+    onClick?: () => void
   }) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-3xl border bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+          active ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200"
+        }`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">{titolo}</p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950">{valore}</h2>
+            <h2 className="mt-2 text-4xl font-black text-slate-950">{valore}</h2>
             <p className="mt-1 text-xs font-bold text-slate-500">{descrizione}</p>
           </div>
-          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${colore}`}>
-            <Icon className="h-6 w-6" />
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${colore}`}>
+            <Icon className="h-7 w-7" />
+          </div>
+        </div>
+      </button>
+    )
+  }
+
+  function AlertRow({ alert }: { alert: AlertItem }) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 gap-3">
+            <div className="mt-1 shrink-0 text-slate-700">{iconaTipo(alert.tipo)}</div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-black text-slate-950">{alert.titolo}</h3>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${classeGruppo(alert.gruppo)}`}>
+                  {alert.gruppo}
+                </span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${classeGravita(alert.gravita)}`}>
+                  {alert.gravita}
+                </span>
+              </div>
+
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-600">
+                {alert.descrizione}
+              </p>
+
+              <p className="mt-1 text-[11px] font-bold text-slate-500">
+                {alert.locale_nome || "Senza locale"} · {alert.email || "Nessuna email"} · {alert.settimana_key || "senza settimana"}
+              </p>
+
+              {alert.link && (
+                <button
+                  onClick={() => vai(alert.link || "/admin-dashboard")}
+                  className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+                >
+                  Apri dettaglio
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -620,207 +755,314 @@ export default function AdminAlert() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 py-4 sm:px-5 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <section className="rounded-2xl bg-slate-950 p-4 text-white shadow-lg">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-xl font-black tracking-tight">Centro anomalie live</h1>
-              <p className="mt-0.5 text-xs font-bold text-slate-300">
-                Admin · Ordini, consegne, fatture, anagrafica e magazzino
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <button
-                onClick={() => vai("/admin-dashboard")}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white"
-              >
-                <Home className="h-4 w-4" />
-                Home Admin
-              </button>
-              <button onClick={logout} className="rounded-lg bg-red-500 px-3 py-2 text-xs font-black text-white">
-                Logout
-              </button>
-            </div>
+    <main className="space-y-6">
+      <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-wide text-blue-300">
+              Sistema
+            </p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">
+              Centro alert
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm font-bold text-slate-300 sm:text-base">
+              Controlli operativi, fatture, anagrafica, magazzino e consumi.
+            </p>
           </div>
-        </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <KpiCard titolo="Alert attivi" valore={conteggi.totali} descrizione="Totale anomalie live" icon={Bell} colore="bg-slate-100 text-slate-700" />
-          <KpiCard titolo="Critici" valore={conteggi.alta} descrizione="Gravità alta" icon={AlertTriangle} colore="bg-red-100 text-red-700" />
-          <KpiCard titolo="Operativo" valore={conteggi.operativo} descrizione="Ordini e consegne" icon={Truck} colore="bg-amber-100 text-amber-700" />
-          <KpiCard titolo="Fatture" valore={conteggi.fatture} descrizione="Match e quantità" icon={FileText} colore="bg-blue-100 text-blue-700" />
-          <KpiCard titolo="Anagrafica" valore={conteggi.anagrafica} descrizione="Codici e prezzi" icon={Tag} colore="bg-purple-100 text-purple-700" />
-          <KpiCard titolo="Magazzino" valore={conteggi.magazzino + conteggi.consumi} descrizione="Soglie e consumi" icon={Package} colore="bg-emerald-100 text-emerald-700" />
-        </section>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={caricaDati}
+              disabled={loading}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white disabled:bg-slate-500"
+            >
+              <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+              Aggiorna
+            </button>
 
-        <section className="grid gap-3 xl:grid-cols-[1fr_180px_180px_200px_220px]">
+            <button
+              onClick={eseguiControlloEmail}
+              className="inline-flex h-12 items-center justify-center rounded-2xl bg-red-600 px-5 text-sm font-black text-white"
+            >
+              Controllo email
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {errore && (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-700">
+          {errore}
+        </section>
+      )}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <CardConteggio
+          titolo="Totali"
+          valore={conteggi.totali}
+          descrizione="Alert attivi"
+          icon={Bell}
+          colore="bg-slate-100 text-slate-700"
+          active={sezioneAperta === "tutti"}
+          onClick={() => setSezioneAperta("tutti")}
+        />
+        <CardConteggio
+          titolo="Critici"
+          valore={conteggi.alta}
+          descrizione="Priorità alta"
+          icon={AlertTriangle}
+          colore="bg-red-100 text-red-700"
+          active={sezioneAperta === "critici"}
+          onClick={() => setSezioneAperta("critici")}
+        />
+        <CardConteggio
+          titolo="Operativo"
+          valore={conteggi.operativo}
+          descrizione="Ordini e consegne"
+          icon={Truck}
+          colore="bg-amber-100 text-amber-700"
+          active={sezioneAperta === "operativo"}
+          onClick={() => setSezioneAperta("operativo")}
+        />
+        <CardConteggio
+          titolo="Fatture"
+          valore={conteggi.fatture}
+          descrizione="Controlli fatture"
+          icon={FileText}
+          colore="bg-blue-100 text-blue-700"
+          active={sezioneAperta === "fatture"}
+          onClick={() => setSezioneAperta("fatture")}
+        />
+        <CardConteggio
+          titolo="Anagrafica"
+          valore={conteggi.anagrafica}
+          descrizione="Codici e prezzi"
+          icon={Tag}
+          colore="bg-purple-100 text-purple-700"
+          active={sezioneAperta === "anagrafica"}
+          onClick={() => setSezioneAperta("anagrafica")}
+        />
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_220px_220px]">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Cerca alert, locale, fattura, prodotto, codice..."
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
-              className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white pl-10 pr-3 text-sm font-bold text-slate-950 placeholder:text-slate-500"
+              className="h-14 w-full rounded-2xl border-2 border-slate-200 bg-white pl-12 pr-4 text-base font-bold text-slate-950 outline-none focus:border-blue-600"
             />
           </div>
 
-          <select
-            value={filtroGruppo}
-            onChange={(e) => setFiltroGruppo(e.target.value)}
-            className="h-12 rounded-xl border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-950"
+          <button
+            onClick={() => vai("/admin-storico-fatture")}
+            className="h-14 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white"
           >
-            <option value="tutti">Tutti i gruppi</option>
-            <option value="operativo">Operativo</option>
-            <option value="fatture">Fatture</option>
-            <option value="anagrafica">Anagrafica</option>
-            <option value="magazzino">Magazzino</option>
-            <option value="consumi">Consumi</option>
-          </select>
-
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value)}
-            className="h-12 rounded-xl border-2 border-slate-300 bg-white px-3 text-sm font-bold text-slate-950"
-          >
-            <option value="tutti">Tutti i tipi</option>
-            <option value="giacenza">Giacenze</option>
-            <option value="ordine">Ordini</option>
-            <option value="consegna">Consegne</option>
-            <option value="fattura_anomalia">Fattura anomalia</option>
-            <option value="fattura_no_match">Fattura no match</option>
-            <option value="fattura_qta_diversa">Quantità diversa</option>
-            <option value="prodotto_senza_codice">Prodotto senza codice</option>
-            <option value="prodotto_senza_prezzo">Prodotto senza prezzo</option>
-            <option value="anomalia">Consumi anomali</option>
-            <option value="inevaso">Sempre inevasi</option>
-            <option value="inattivo">Locali inattivi</option>
-            <option value="soglia">Sotto soglia</option>
-          </select>
-
-          <button onClick={() => vai("/admin-storico-fatture")} className="h-12 rounded-xl bg-blue-600 px-4 text-sm font-black text-white">
             Storico fatture
           </button>
 
-          <button onClick={eseguiControlloEmail} className="h-12 rounded-xl bg-red-600 px-4 text-sm font-black text-white">
-            Controllo email
+          <button
+            onClick={() => setRicerca("")}
+            className="h-14 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white"
+          >
+            Pulisci ricerca
           </button>
+        </div>
+      </section>
+
+      {loading ? (
+        <section className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm font-black text-slate-500">
+          Caricamento alert...
         </section>
+      ) : (
+        <section className="grid gap-5 xl:grid-cols-[1fr_380px]">
+          <div className="space-y-4">
+            {sezioneAperta === "tutti" ? (
+              sezioni.map((sezione) => {
+                const Icon = sezione.icon
+                const items = alertPerSezione.get(sezione.key) || []
+                const aperta = false
 
-        {errore && (
-          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-700">{errore}</section>
-        )}
+                return (
+                  <button
+                    key={sezione.key}
+                    onClick={() => setSezioneAperta(sezione.key)}
+                    className="flex w-full items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm hover:bg-slate-50"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${sezione.colore}`}>
+                        <Icon className="h-7 w-7" />
+                      </div>
 
-        {loading ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500">
-            Caricamento alert...
-          </section>
-        ) : (
-          <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                  <h2 className="text-lg font-black text-slate-950">Alert attivi</h2>
+                      <div className="min-w-0">
+                        <h2 className="text-2xl font-black text-slate-950">
+                          {sezione.titolo}
+                        </h2>
+                        <p className="mt-1 text-sm font-bold text-slate-500">
+                          {sezione.descrizione}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-4xl font-black text-slate-950">
+                          {items.length}
+                        </p>
+                        <p className="text-xs font-black uppercase text-slate-500">
+                          alert
+                        </p>
+                      </div>
+                      {aperta ? (
+                        <ChevronDown className="h-6 w-6 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="h-6 w-6 text-slate-400" />
+                      )}
+                    </div>
+                  </button>
+                )
+              })
+            ) : (
+              <>
+                <button
+                  onClick={() => setSezioneAperta("tutti")}
+                  className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white"
+                >
+                  ← Torna alle sezioni
+                </button>
+
+                {(() => {
+                  const sezione =
+                    sezioni.find((s) => s.key === sezioneAperta) ||
+                    sezioni[0]
+                  const Icon = sezione.icon
+                  const items =
+                    sezioneAperta === "tutti"
+                      ? alertFiltrati
+                      : alertPerSezione.get(sezione.key) || []
+
+                  return (
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${sezione.colore}`}>
+                            <Icon className="h-7 w-7" />
+                          </div>
+                          <div>
+                            <h2 className="text-3xl font-black text-slate-950">
+                              {sezione.titolo}
+                            </h2>
+                            <p className="text-sm font-bold text-slate-500">
+                              {sezione.descrizione}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
+                          {items.length} alert
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {items.map((alert) => (
+                          <AlertRow key={alert.id} alert={alert} />
+                        ))}
+
+                        {items.length === 0 && (
+                          <div className="rounded-2xl border border-green-200 bg-green-50 p-5 text-sm font-black text-green-700">
+                            Nessun alert in questa sezione.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </>
+            )}
+          </div>
+
+          <aside className="space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <h2 className="text-lg font-black text-slate-950">
+                  Stato controlli
+                </h2>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold">
+                  <span>Fatture lette</span>
+                  <span>{invoiceImports.length}</span>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-                  {alertFiltrati.length} filtrati
-                </span>
+                <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold">
+                  <span>Righe fattura</span>
+                  <span>{invoiceRows.length}</span>
+                </div>
+                <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold">
+                  <span>Prodotti</span>
+                  <span>{products.length}</span>
+                </div>
+                <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold">
+                  <span>Ordini storici</span>
+                  <span>{ordiniStorici.length}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Mail className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-black text-slate-950">
+                  Log email alert
+                </h2>
               </div>
 
               <div className="space-y-3">
-                {alertFiltrati.map((alert) => (
-                  <div key={alert.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                {logFiltrati.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+                  >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 gap-3">
-                        <div className="mt-1 shrink-0 text-slate-700">{iconaTipo(alert.tipo)}</div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-sm font-black text-slate-950">{alert.titolo}</h3>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${classeGruppo(alert.gruppo)}`}>
-                              {alert.gruppo}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs font-bold leading-5 text-slate-600">{alert.descrizione}</p>
-                          <p className="mt-1 text-[11px] font-bold text-slate-500">
-                            {alert.email || "Nessuna email"} · {alert.settimana_key || "senza settimana"}
+                      <div>
+                        <h3 className="text-sm font-black text-slate-950">
+                          {log.locale_nome}
+                        </h3>
+                        <p className="mt-1 text-xs font-bold text-slate-600">
+                          {log.email} · {log.tipo_alert}
+                        </p>
+                        <p className="mt-1 text-[11px] font-bold text-slate-500">
+                          Settimana: {log.settimana_key}
+                        </p>
+                        {log.errore && (
+                          <p className="mt-1 text-xs font-bold text-red-600">
+                            {log.errore}
                           </p>
-                          {alert.link && (
-                            <button onClick={() => vai(alert.link || "/admin-dashboard")} className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-black text-white">
-                              Apri dettaglio
-                            </button>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase ${classeGravita(alert.gravita)}`}>
-                        {alert.gravita}
-                      </span>
+                      {log.inviato ? (
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-600" />
+                      )}
                     </div>
                   </div>
                 ))}
 
-                {alertFiltrati.length === 0 && (
-                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-700">
-                    Nessun alert attivo con i filtri selezionati.
+                {logFiltrati.length === 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+                    Nessun log email trovato.
                   </div>
                 )}
               </div>
             </div>
-
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  <h2 className="text-lg font-black text-slate-950">Stato controlli</h2>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Fatture lette</span><span>{invoiceImports.length}</span></div>
-                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Righe fattura analizzate</span><span>{invoiceRows.length}</span></div>
-                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Prodotti anagrafica</span><span>{products.length}</span></div>
-                  <div className="flex justify-between rounded-xl bg-slate-50 p-3 text-sm font-bold"><span>Ordini storici</span><span>{ordiniStorici.length}</span></div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-blue-600" />
-                  <h2 className="text-lg font-black text-slate-950">Log email alert</h2>
-                </div>
-
-                <div className="space-y-3">
-                  {logFiltrati.map((log) => (
-                    <div key={log.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-sm font-black text-slate-950">{log.locale_nome}</h3>
-                          <p className="mt-1 text-xs font-bold text-slate-600">{log.email} · {log.tipo_alert}</p>
-                          <p className="mt-1 text-[11px] font-bold text-slate-500">Settimana: {log.settimana_key}</p>
-                          {log.errore && <p className="mt-1 text-xs font-bold text-red-600">{log.errore}</p>}
-                        </div>
-                        {log.inviato ? <CheckCircle className="h-5 w-5 text-green-600" /> : <XCircle className="h-5 w-5 text-red-600" />}
-                      </div>
-                    </div>
-                  ))}
-
-                  {logFiltrati.length === 0 && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                      Nessun log email trovato.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        <button onClick={caricaDati} disabled={loading} className="fixed bottom-4 right-4 inline-flex h-12 items-center gap-2 rounded-full bg-slate-950 px-5 text-sm font-black text-white shadow-xl disabled:bg-slate-400">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Aggiorna
-        </button>
-      </div>
+          </aside>
+        </section>
+      )}
     </main>
   )
 }
