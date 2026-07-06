@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import {
+  ChevronDown,
   ClipboardList,
   Grid3X3,
   Home,
@@ -19,6 +20,12 @@ type Props = {
   unreadCount?: number
 }
 
+type LocaleScelta = {
+  restaurant_id: string
+  restaurant_name: string
+  role?: string | null
+}
+
 const links = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
   { label: "Giacenze", href: "/giacenze", icon: Warehouse },
@@ -31,8 +38,12 @@ const links = [
 export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
   const pathname = usePathname()
   const panelRef = useRef<HTMLDivElement>(null)
+
   const [open, setOpen] = useState(false)
+  const [selectorAperto, setSelectorAperto] = useState(false)
   const [localeNome, setLocaleNome] = useState("Locale")
+  const [localeId, setLocaleId] = useState("")
+  const [localiDisponibili, setLocaliDisponibili] = useState<LocaleScelta[]>([])
 
   useEffect(() => {
     caricaSessione()
@@ -43,8 +54,27 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    const nome = String(user?.app_metadata?.locale_nome || "Locale")
-    setLocaleNome(nome)
+    if (!user) return
+
+    const { data } = await supabase
+      .from("local_user_restaurants")
+      .select("restaurant_id, restaurant_name, role")
+      .eq("user_id", user.id)
+      .order("restaurant_name", { ascending: true })
+
+    const locali = data || []
+    setLocaliDisponibili(locali)
+
+    const idSalvato =
+      localStorage.getItem("locale_id") ||
+      String(user.app_metadata?.locale_id || "")
+
+    const nomeSalvato =
+      localStorage.getItem("locale_nome") ||
+      String(user.app_metadata?.locale_nome || "")
+
+    setLocaleId(idSalvato)
+    setLocaleNome(nomeSalvato || "Locale")
   }
 
   useEffect(() => {
@@ -53,12 +83,26 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
     function chiudiFuori(event: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         setOpen(false)
+        setSelectorAperto(false)
       }
     }
 
     document.addEventListener("mousedown", chiudiFuori)
     return () => document.removeEventListener("mousedown", chiudiFuori)
   }, [open])
+
+  function cambiaLocale(locale: LocaleScelta) {
+    localStorage.setItem("locale_id", String(locale.restaurant_id))
+    localStorage.setItem("locale_nome", String(locale.restaurant_name))
+    localStorage.setItem("locale_scelto", "true")
+
+    setLocaleId(String(locale.restaurant_id))
+    setLocaleNome(String(locale.restaurant_name))
+    setSelectorAperto(false)
+    setOpen(false)
+
+    window.location.href = "/dashboard"
+  }
 
   function vai(href: string) {
     setOpen(false)
@@ -70,6 +114,7 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
     localStorage.removeItem("locale_id")
     localStorage.removeItem("locale_nome")
     localStorage.removeItem("restaurant_name")
+    localStorage.removeItem("locale_scelto")
     window.location.href = "/"
   }
 
@@ -118,13 +163,54 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
               </div>
 
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false)
+                  setSelectorAperto(false)
+                }}
                 className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700"
                 aria-label="Chiudi menu"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {localiDisponibili.length > 1 && (
+              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-blue-700">
+                  Cambia locale
+                </p>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setSelectorAperto((value) => !value)}
+                    className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-950 px-3 py-3 text-left text-sm font-black text-white"
+                  >
+                    <span className="truncate">
+                      {localeNome || "Seleziona locale"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </button>
+
+                  {selectorAperto && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl">
+                      {localiDisponibili.map((locale) => (
+                        <button
+                          key={`mobile-header-${locale.restaurant_id}`}
+                          onClick={() => cambiaLocale(locale)}
+                          className={`w-full px-4 py-3 text-left text-sm font-black hover:bg-blue-50 ${
+                            String(locale.restaurant_id) === String(localeId)
+                              ? "bg-blue-600 text-white hover:bg-blue-600"
+                              : ""
+                          }`}
+                        >
+                          {locale.restaurant_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-2">
               {links.map((item) => {
