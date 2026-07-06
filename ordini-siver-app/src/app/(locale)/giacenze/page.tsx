@@ -10,6 +10,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  Save,
   Search,
   User,
   Warehouse,
@@ -37,7 +38,9 @@ export default function Giacenze() {
   const [blocco, setBlocco] = useState("")
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDraftSaving, setIsDraftSaving] = useState(false)
   const [ultimaModifica, setUltimaModifica] = useState<string | null>(null)
+  const [ultimaBozza, setUltimaBozza] = useState<string | null>(null)
 
   const [ricerca, setRicerca] = useState("")
   const [filtro, setFiltro] = useState("tutti")
@@ -88,7 +91,9 @@ export default function Giacenze() {
     setLocaleNome(nome)
     setOperatore(nomeUtenteDaSessione(user))
 
-    await Promise.all([caricaProdotti(id), controllaBloccoGiacenze(id)])
+    await caricaProdotti(id)
+    caricaBozzaGiacenze(id)
+    await controllaBloccoGiacenze(id)
 
     setLoading(false)
   }
@@ -162,6 +167,38 @@ export default function Giacenze() {
       month: "short",
       year: "numeric",
     })}`
+  }
+
+
+  function chiaveBozzaGiacenze(id: string) {
+    return `giacenze_bozza_${id}_${getSettimanaKey()}`
+  }
+
+  function caricaBozzaGiacenze(id: string) {
+    try {
+      const salvata = window.localStorage.getItem(chiaveBozzaGiacenze(id))
+      if (!salvata) return
+
+      const bozza = JSON.parse(salvata) as {
+        quantita?: Record<string, string>
+        salvataAlle?: string
+      }
+
+      if (bozza?.quantita && typeof bozza.quantita === "object") {
+        setQuantita(bozza.quantita)
+      }
+
+      if (bozza?.salvataAlle) {
+        setUltimaBozza(bozza.salvataAlle)
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  function rimuoviBozzaGiacenze(id: string) {
+    window.localStorage.removeItem(chiaveBozzaGiacenze(id))
+    setUltimaBozza(null)
   }
 
   async function caricaProdotti(id: string) {
@@ -322,7 +359,9 @@ export default function Giacenze() {
     if (!localeId) return
 
     setLoading(true)
-    await Promise.all([caricaProdotti(localeId), controllaBloccoGiacenze(localeId)])
+    await caricaProdotti(localeId)
+    caricaBozzaGiacenze(localeId)
+    await controllaBloccoGiacenze(localeId)
     setLoading(false)
     showToast("Giacenze aggiornate", "success")
   }
@@ -349,10 +388,21 @@ export default function Giacenze() {
     return "border-slate-200 bg-slate-100 text-slate-700"
   }
 
+  function normalizzaQuantitaInput(valore: string) {
+    const soloNumeri = valore.replace(/\D/g, "").slice(0, 4)
+
+    if (soloNumeri === "") return ""
+
+    const numero = Math.min(9999, Math.max(0, Number(soloNumeri)))
+    return String(numero)
+  }
+
   function aggiornaQuantita(idProdotto: string, valore: string) {
+    const valorePulito = normalizzaQuantitaInput(valore)
+
     setQuantita((attuali) => ({
       ...attuali,
-      [idProdotto]: valore,
+      [idProdotto]: valorePulito,
     }))
     setUltimaModifica(idProdotto)
 
@@ -363,9 +413,14 @@ export default function Giacenze() {
 
   function cambiaQuantita(idProdotto: string, variazione: number) {
     const attuale = Number(quantita[idProdotto] || 0)
-    const nuova = Math.max(0, attuale + variazione)
+    const nuova = Math.min(9999, Math.max(0, attuale + variazione))
 
-    aggiornaQuantita(idProdotto, nuova === 0 ? "" : String(nuova))
+    aggiornaQuantita(idProdotto, String(nuova))
+  }
+
+  function prodottoCompilato(prodotto: ProdottoGiacenza) {
+    const valore = quantita[prodotto.id]
+    return valore !== undefined && valore !== ""
   }
 
   const prodottiFiltrati = useMemo(() => {
@@ -381,11 +436,11 @@ export default function Giacenze() {
     }
 
     if (soloDaCompilare) {
-      lista = lista.filter((p) => !quantita[p.id] || Number(quantita[p.id] || 0) <= 0)
+      lista = lista.filter((p) => !prodottoCompilato(p))
     }
 
     if (filtro === "compilati") {
-      lista = lista.filter((p) => Number(quantita[p.id] || 0) > 0)
+      lista = lista.filter((p) => prodottoCompilato(p))
     } else if (filtro !== "tutti") {
       lista = lista.filter((p) => statoSoglia(p) === filtro)
     }
@@ -424,9 +479,7 @@ export default function Giacenze() {
 
   const prodottiTotali = prodotti.length
 
-  const prodottiCompilati = prodotti.filter(
-    (p) => Number(quantita[p.id] || 0) > 0
-  ).length
+  const prodottiCompilati = prodotti.filter((p) => prodottoCompilato(p)).length
 
   const quantitaTotaleCompilata = prodotti.reduce(
     (totale, p) => totale + Number(quantita[p.id] || 0),
@@ -441,7 +494,43 @@ export default function Giacenze() {
     ? Math.round((prodottiCompilati / prodottiTotali) * 100)
     : 0
 
-  async function salvaGiacenze() {
+  async function salvaBozzaGiacenze() {
+    if (isDraftSaving || isSaving) return
+
+    if (!localeId || !localeNome) {
+      showToast("Sessione locale non valida. Effettua di nuovo il login.", "error")
+      await supabase.auth.signOut()
+      window.location.href = "/"
+      return
+    }
+
+    setIsDraftSaving(true)
+
+    try {
+      const salvataAlle = new Date().toISOString()
+
+      window.localStorage.setItem(
+        chiaveBozzaGiacenze(localeId),
+        JSON.stringify({
+          locale_id: localeId,
+          locale_nome: localeNome,
+          settimana_key: getSettimanaKey(),
+          quantita,
+          salvataAlle,
+        })
+      )
+
+      setUltimaBozza(salvataAlle)
+      showToast("Bozza giacenze salvata", "success")
+    } catch (error) {
+      console.log(error)
+      showToast("Errore salvataggio bozza", "error")
+    }
+
+    setIsDraftSaving(false)
+  }
+
+  async function inviaGiacenze() {
     if (isSaving) return
 
     if (!localeId || !localeNome) {
@@ -456,8 +545,20 @@ export default function Giacenze() {
       return
     }
 
+    const prodottiMancanti = prodotti.filter((p) => !prodottoCompilato(p))
+
+    if (prodottiMancanti.length > 0) {
+      showToast(
+        `Mancano ${prodottiMancanti.length} prodotti da compilare. Usa il filtro "Da compilare" per vederli.`,
+        "warning"
+      )
+      setSoloDaCompilare(true)
+      setFiltro("Da compilare")
+      return
+    }
+
     const conferma = window.confirm(
-      `Stai salvando ${prodottiCompilati} prodotti compilati per una quantità totale di ${quantitaTotaleCompilata}. Confermi?`
+      `Stai inviando le giacenze definitive per ${prodottiTotali} prodotti, quantità totale ${quantitaTotaleCompilata}. Dopo l'invio non potrai modificarle fino alla prossima settimana. Confermi?`
     )
 
     if (!conferma) return
@@ -479,19 +580,20 @@ export default function Giacenze() {
 
     if (error) {
       console.log(error)
-      showToast("Errore salvataggio giacenze", "error")
+      showToast("Errore invio giacenze", "error")
       setIsSaving(false)
       return
     }
 
-    showToast("Giacenze salvate!", "success")
+    rimuoviBozzaGiacenze(localeId)
+    showToast("Giacenze inviate!", "success")
 
     setTimeout(() => {
       window.location.href = "/dashboard"
     }, 800)
   }
 
-  function QuantitaControl({ prodotto }: { prodotto: ProdottoGiacenza }) {
+  function renderQuantitaControl(prodotto: ProdottoGiacenza) {
     return (
       <div className="flex items-center justify-end gap-2">
         <button
@@ -505,12 +607,14 @@ export default function Giacenze() {
         </button>
 
         <input
-          type="number"
-          inputMode="decimal"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={4}
           value={quantita[prodotto.id] || ""}
           disabled={!!blocco || isSaving}
           onChange={(e) => aggiornaQuantita(prodotto.id, e.target.value)}
-          className="h-11 w-24 rounded-xl border-2 border-slate-200 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none transition-all focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-500"
+          className="h-11 w-28 rounded-xl border-2 border-slate-200 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none transition-all focus:border-blue-600 disabled:bg-slate-200 disabled:text-slate-500"
           placeholder="0"
         />
 
@@ -640,6 +744,11 @@ export default function Giacenze() {
                 <User className="h-4 w-4 text-blue-600" />
                 <span className="truncate">{operatore}</span>
               </div>
+              <p className="mt-1 text-xs font-black text-slate-400">
+                {ultimaBozza
+                  ? `Bozza salvata alle ${new Date(ultimaBozza).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`
+                  : "Nessuna bozza salvata"}
+              </p>
             </div>
           </div>
         </section>
@@ -775,8 +884,8 @@ export default function Giacenze() {
                       </div>
 
                       <div className="px-4 py-3 text-center">
-                        <p className="text-xl font-black text-slate-950">{valore || "—"}</p>
-                        <p className="text-xs font-bold text-slate-500">{valore ? "inserita" : "da compilare"}</p>
+                        <p className="text-xl font-black text-slate-950">{prodottoCompilato(prodotto) ? valore : "—"}</p>
+                        <p className="text-xs font-bold text-slate-500">{prodottoCompilato(prodotto) ? "inserita" : "da compilare"}</p>
                       </div>
 
                       <div className="px-4 py-3 text-center text-base font-black text-slate-600">
@@ -790,7 +899,7 @@ export default function Giacenze() {
                       </div>
 
                       <div className="px-4 py-3">
-                        <QuantitaControl prodotto={prodotto} />
+                        {renderQuantitaControl(prodotto)}
                       </div>
                     </div>
                   )
@@ -824,7 +933,7 @@ export default function Giacenze() {
                           </div>
                         </div>
 
-                        <QuantitaControl prodotto={prodotto} />
+                        {renderQuantitaControl(prodotto)}
                       </div>
                     </div>
                   )
@@ -855,20 +964,37 @@ export default function Giacenze() {
             </div>
           </div>
 
-          <button
-            onClick={salvaGiacenze}
-            disabled={!!blocco || isSaving || loading}
-            className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-8 text-base font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-500"
-          >
-            {isSaving ? (
-              "Salvataggio..."
-            ) : (
-              <>
-                <CheckCircle2 className="h-5 w-5" />
-                Salva giacenze
-              </>
-            )}
-          </button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              onClick={salvaBozzaGiacenze}
+              disabled={!!blocco || isDraftSaving || isSaving || loading}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-700 px-6 text-base font-black text-white transition-all hover:bg-slate-600 disabled:bg-slate-500"
+            >
+              {isDraftSaving ? (
+                "Salvataggio..."
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  Salva bozza
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={inviaGiacenze}
+              disabled={!!blocco || isSaving || loading}
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-base font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-500"
+            >
+              {isSaving ? (
+                "Invio..."
+              ) : (
+                <>
+                  <CheckCircle2 className="h-5 w-5" />
+                  Invia giacenze
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </main>
