@@ -1,17 +1,31 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
+
+type RigaSoglia = {
+  prodotto_id: string
+  supplier_code: string | null
+  nome_prodotto: string
+  active: boolean
+  min_stock: number | string
+  max_stock: number | string
+}
 
 export default function AdminSoglieGiacenze() {
   const { showToast } = useToast()
 
   const [locali, setLocali] = useState<any[]>([])
   const [localeId, setLocaleId] = useState("")
-  const [righe, setRighe] = useState<any[]>([])
+  const [righe, setRighe] = useState<RigaSoglia[]>([])
   const [loading, setLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+
+  const [ricerca, setRicerca] = useState("")
+  const [filtroStato, setFiltroStato] = useState("tutti")
+  const [filtroSoglia, setFiltroSoglia] = useState("tutte")
+  const [ordinamento, setOrdinamento] = useState("codice")
 
   useEffect(() => {
     caricaLocali()
@@ -35,6 +49,10 @@ export default function AdminSoglieGiacenze() {
   async function caricaSoglie(id: string) {
     setLocaleId(id)
     setRighe([])
+    setRicerca("")
+    setFiltroStato("tutti")
+    setFiltroSoglia("tutte")
+    setOrdinamento("codice")
 
     if (!id) return
 
@@ -96,15 +114,64 @@ export default function AdminSoglieGiacenze() {
     setLoading(false)
   }
 
-  function aggiornaRiga(index: number, campo: string, valore: any) {
-    const nuove = [...righe]
+  const righeFiltrate = useMemo(() => {
+    const q = ricerca.toLowerCase().trim()
 
-    nuove[index] = {
-      ...nuove[index],
-      [campo]: valore,
-    }
+    return [...righe]
+      .filter((riga) => {
+        const matchRicerca =
+          !q ||
+          String(riga.nome_prodotto || "").toLowerCase().includes(q) ||
+          String(riga.supplier_code || "").toLowerCase().includes(q)
 
-    setRighe(nuove)
+        const haSoglia =
+          Number(riga.min_stock || 0) > 0 || Number(riga.max_stock || 0) > 0
+
+        const matchStato =
+          filtroStato === "tutti" ||
+          (filtroStato === "attive" && riga.active) ||
+          (filtroStato === "disattive" && !riga.active)
+
+        const matchSoglia =
+          filtroSoglia === "tutte" ||
+          (filtroSoglia === "con-soglia" && haSoglia) ||
+          (filtroSoglia === "senza-soglia" && !haSoglia) ||
+          (filtroSoglia === "modificati" && (riga.active || haSoglia))
+
+        return matchRicerca && matchStato && matchSoglia
+      })
+      .sort((a, b) => {
+        if (ordinamento === "nome") {
+          return String(a.nome_prodotto || "").localeCompare(
+            String(b.nome_prodotto || "")
+          )
+        }
+
+        if (ordinamento === "minima") {
+          return Number(b.min_stock || 0) - Number(a.min_stock || 0)
+        }
+
+        if (ordinamento === "massima") {
+          return Number(b.max_stock || 0) - Number(a.max_stock || 0)
+        }
+
+        return String(a.supplier_code || "").localeCompare(
+          String(b.supplier_code || "")
+        )
+      })
+  }, [righe, ricerca, filtroStato, filtroSoglia, ordinamento])
+
+  function aggiornaRiga(prodottoId: string, campo: string, valore: any) {
+    setRighe((righeAttuali) =>
+      righeAttuali.map((riga) =>
+        riga.prodotto_id === prodottoId
+          ? {
+              ...riga,
+              [campo]: valore,
+            }
+          : riga
+      )
+    )
   }
 
   async function salvaSoglie() {
@@ -229,20 +296,90 @@ export default function AdminSoglieGiacenze() {
           </p>
         </section>
 
-        <select
-          value={localeId}
-          onChange={(e) => caricaSoglie(e.target.value)}
-          disabled={isSaving || loading}
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none disabled:bg-slate-200"
-        >
-          <option value="">Seleziona locale</option>
+        <section className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <select
+            value={localeId}
+            onChange={(e) => caricaSoglie(e.target.value)}
+            disabled={isSaving || loading}
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none disabled:bg-slate-200"
+          >
+            <option value="">Seleziona locale</option>
 
-          {locali.map((locale) => (
-            <option key={locale.id} value={locale.id}>
-              {locale.name}
-            </option>
-          ))}
-        </select>
+            {locali.map((locale) => (
+              <option key={locale.id} value={locale.id}>
+                {locale.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="grid gap-3 lg:grid-cols-[1.4fr_180px_210px_180px]">
+            <input
+              type="search"
+              value={ricerca}
+              onChange={(e) => setRicerca(e.target.value)}
+              placeholder="Cerca codice o prodotto..."
+              disabled={!localeId || isSaving || loading}
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none placeholder:text-slate-400 disabled:bg-slate-200"
+            />
+
+            <select
+              value={filtroStato}
+              onChange={(e) => setFiltroStato(e.target.value)}
+              disabled={!localeId || isSaving || loading}
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none disabled:bg-slate-200"
+            >
+              <option value="tutti">Tutti gli stati</option>
+              <option value="attive">Solo attive</option>
+              <option value="disattive">Solo disattive</option>
+            </select>
+
+            <select
+              value={filtroSoglia}
+              onChange={(e) => setFiltroSoglia(e.target.value)}
+              disabled={!localeId || isSaving || loading}
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none disabled:bg-slate-200"
+            >
+              <option value="tutte">Tutte le soglie</option>
+              <option value="con-soglia">Con soglia impostata</option>
+              <option value="senza-soglia">Senza soglia</option>
+              <option value="modificati">Solo configurati</option>
+            </select>
+
+            <select
+              value={ordinamento}
+              onChange={(e) => setOrdinamento(e.target.value)}
+              disabled={!localeId || isSaving || loading}
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm outline-none disabled:bg-slate-200"
+            >
+              <option value="codice">Ordina per codice</option>
+              <option value="nome">Ordina per nome</option>
+              <option value="minima">Minima più alta</option>
+              <option value="massima">Massima più alta</option>
+            </select>
+          </div>
+
+          {localeId && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500">
+              <span>
+                Visualizzati {righeFiltrate.length} prodotti su {righe.length}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRicerca("")
+                  setFiltroStato("tutti")
+                  setFiltroSoglia("tutte")
+                  setOrdinamento("codice")
+                }}
+                disabled={isSaving || loading}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50"
+              >
+                Reset filtri
+              </button>
+            </div>
+          )}
+        </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
@@ -259,7 +396,7 @@ export default function AdminSoglieGiacenze() {
                 <div className="px-3 py-2.5">Massima</div>
               </div>
 
-              {righe.map((riga, index) => (
+              {righeFiltrate.map((riga, index) => (
                 <div
                   key={`${riga.prodotto_id}-${index}`}
                   className={`grid grid-cols-1 gap-2 border-b border-slate-100 px-3 py-3 last:border-b-0 md:grid-cols-[120px_1fr_100px_130px_130px] md:items-center md:gap-0 ${
@@ -280,7 +417,11 @@ export default function AdminSoglieGiacenze() {
                       checked={riga.active}
                       disabled={isSaving}
                       onChange={(e) =>
-                        aggiornaRiga(index, "active", e.target.checked)
+                        aggiornaRiga(
+                          riga.prodotto_id,
+                          "active",
+                          e.target.checked
+                        )
                       }
                     />
 
@@ -292,7 +433,7 @@ export default function AdminSoglieGiacenze() {
                     value={riga.min_stock}
                     disabled={isSaving}
                     onChange={(e) =>
-                      aggiornaRiga(index, "min_stock", e.target.value)
+                      aggiornaRiga(riga.prodotto_id, "min_stock", e.target.value)
                     }
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 disabled:bg-slate-200"
                   />
@@ -302,7 +443,7 @@ export default function AdminSoglieGiacenze() {
                     value={riga.max_stock}
                     disabled={isSaving}
                     onChange={(e) =>
-                      aggiornaRiga(index, "max_stock", e.target.value)
+                      aggiornaRiga(riga.prodotto_id, "max_stock", e.target.value)
                     }
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 disabled:bg-slate-200"
                   />
@@ -312,6 +453,12 @@ export default function AdminSoglieGiacenze() {
               {!localeId && (
                 <div className="px-4 py-8 text-center text-sm font-semibold text-slate-500">
                   Seleziona un locale per configurare le soglie.
+                </div>
+              )}
+
+              {localeId && righe.length > 0 && righeFiltrate.length === 0 && (
+                <div className="px-4 py-8 text-center text-sm font-semibold text-slate-500">
+                  Nessun prodotto corrisponde ai filtri selezionati.
                 </div>
               )}
 

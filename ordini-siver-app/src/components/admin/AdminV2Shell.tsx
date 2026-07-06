@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -13,15 +14,15 @@ import {
   Package,
   Ruler,
   ShoppingCart,
+  SlidersHorizontal,
   Tags,
   Truck,
   Users,
   Warehouse,
-  SlidersHorizontal,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
-const sections = [
+const menuGroups = [
   {
     title: "Centro controllo",
     items: [{ href: "/admin-dashboard", label: "Dashboard", icon: Home }],
@@ -31,9 +32,17 @@ const sections = [
     items: [
       { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
       { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
-      { href: "/admin-soglie-giacenze", label: "Soglie giacenze", icon: SlidersHorizontal },
+      {
+        href: "/admin-soglie-giacenze",
+        label: "Soglie giacenze",
+        icon: SlidersHorizontal,
+      },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
-      { href: "/admin-storico-ordini", label: "Storico ordini", icon: ClipboardList },
+      {
+        href: "/admin-storico-ordini",
+        label: "Storico ordini",
+        icon: ClipboardList,
+      },
     ],
   },
   {
@@ -50,7 +59,11 @@ const sections = [
     title: "Economia",
     items: [
       { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
-      { href: "/admin-storico-fatture", label: "Storico fatture", icon: ClipboardList },
+      {
+        href: "/admin-storico-fatture",
+        label: "Storico fatture",
+        icon: ClipboardList,
+      },
     ],
   },
   {
@@ -62,77 +75,80 @@ const sections = [
   },
 ]
 
-export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+export default function AdminV2Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
   async function logout() {
+    await supabase.auth.signOut()
     localStorage.removeItem("admin")
     localStorage.removeItem("admin_mode")
-    await supabase.auth.signOut()
     router.replace("/admin")
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <aside className="fixed left-0 top-0 hidden h-screen w-72 flex-col bg-slate-950 text-white lg:flex">
-        <div className="border-b border-white/10 p-6">
-          <div className="text-2xl font-black tracking-tight">Siver Admin</div>
-          <div className="mt-1 text-sm font-semibold text-slate-400">Gestionale V2</div>
+    <div className="min-h-screen bg-slate-100 text-slate-950">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[340px] flex-col border-r border-slate-800 bg-slate-950 text-white lg:flex">
+        <div className="border-b border-slate-800 px-7 py-7">
+          <div className="flex items-center gap-4">
+            <img
+              src="/ordini-siver-logo.png"
+              alt="Ordini Siver"
+              className="h-16 w-16 rounded-2xl object-cover shadow-xl shadow-blue-950/40"
+            />
+
+            <h1 className="text-3xl font-extrabold tracking-tight text-white">
+              Ordini Siver
+            </h1>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-6 overflow-y-auto p-4">
-          {sections.map((section) => (
-            <div key={section.title}>
-              <p className="mb-2 px-4 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                {section.title}
+        <nav className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
+          {menuGroups.map((group) => (
+            <section key={group.title}>
+              <p className="mb-3 px-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                {group.title}
               </p>
 
-              <div className="space-y-1">
-                {section.items.map((item) => {
+              <div className="space-y-2">
+                {group.items.map((item) => {
                   const Icon = item.icon
                   const active =
-                    pathname === item.href || pathname.startsWith(`${item.href}/`)
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`)
 
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                      className={`flex items-center gap-4 rounded-2xl px-5 py-4 text-base font-bold transition ${
                         active
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-950/40"
+                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
                       }`}
                     >
-                      <Icon className="h-5 w-5" />
-                      {item.label}
+                      <Icon className="h-6 w-6" />
+                      <span>{item.label}</span>
                     </Link>
                   )
                 })}
               </div>
-            </div>
+            </section>
           ))}
         </nav>
 
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-slate-800 p-5">
           <button
             onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white hover:bg-red-600"
+            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-red-600 px-5 py-4 text-base font-extrabold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-700"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-5 w-5" />
             Logout
           </button>
         </div>
       </aside>
 
-      <div className="min-h-screen lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur lg:hidden">
-          <div className="font-black text-slate-950">Siver Admin</div>
-          <div className="text-xs font-bold text-slate-500">Gestionale V2</div>
-        </header>
-
-        <main className="w-full p-4 sm:p-6 lg:p-8">{children}</main>
-      </div>
+      <main className="min-h-screen lg:pl-[340px]">{children}</main>
     </div>
   )
 }

@@ -177,12 +177,52 @@ export default function Giacenze() {
       return
     }
 
-    const idsProdotti = (impostazioni || [])
-      .map((item: any) => item.prodotto_id || item.product_id)
-      .filter(Boolean)
+    /*
+      FIX DUPLICATI:
+      nella tabella restaurant_product_settings possono esistere più righe attive
+      per lo stesso prodotto/locale, magari una con prodotto_id e una con product_id.
+      Prima di caricare la lista lato locale, normalizziamo l'id prodotto e teniamo
+      una sola impostazione attiva per prodotto.
+
+      Se troviamo doppioni, teniamo la riga con soglie più complete:
+      - preferiamo quella con min_stock/max_stock valorizzati
+      - a parità, teniamo l'ultima incontrata
+    */
+    const impostazioniUnicheMap = new Map<string, any>()
+
+    ;(impostazioni || []).forEach((item: any) => {
+      const idProdotto = String(item.prodotto_id || item.product_id || "").trim()
+      if (!idProdotto) return
+
+      const esistente = impostazioniUnicheMap.get(idProdotto)
+
+      if (!esistente) {
+        impostazioniUnicheMap.set(idProdotto, item)
+        return
+      }
+
+      const scoreEsistente =
+        Number(esistente.min_stock || 0) + Number(esistente.max_stock || 0)
+      const scoreNuovo = Number(item.min_stock || 0) + Number(item.max_stock || 0)
+
+      if (scoreNuovo >= scoreEsistente) {
+        impostazioniUnicheMap.set(idProdotto, item)
+      }
+    })
+
+    const impostazioniUniche = Array.from(impostazioniUnicheMap.values())
+
+    const idsProdotti = Array.from(
+      new Set(
+        impostazioniUniche
+          .map((item: any) => String(item.prodotto_id || item.product_id || "").trim())
+          .filter(Boolean)
+      )
+    )
 
     if (idsProdotti.length === 0) {
       setProdotti([])
+      setQuantita({})
       return
     }
 
@@ -212,12 +252,16 @@ export default function Giacenze() {
       )
     })
 
-    const prodottiFormattati = (impostazioni || [])
+    const prodottiMap = new Map<string, any>()
+
+    prodottiPuliti.forEach((prodotto: any) => {
+      prodottiMap.set(String(prodotto.id), prodotto)
+    })
+
+    const prodottiFormattati = impostazioniUniche
       .map((item: any) => {
-        const idProdotto = item.prodotto_id || item.product_id
-        const prodotto = prodottiPuliti.find(
-          (p: any) => String(p.id) === String(idProdotto)
-        )
+        const idProdotto = String(item.prodotto_id || item.product_id || "").trim()
+        const prodotto = prodottiMap.get(idProdotto)
 
         if (!prodotto) return null
 
@@ -232,11 +276,26 @@ export default function Giacenze() {
       .filter(Boolean)
       .sort((a: any, b: any) =>
         String(a.nome_prodotto || "").localeCompare(
-          String(b.nome_prodotto || "")
+          String(b.nome_prodotto || ""),
+          "it",
+          { sensitivity: "base" }
         )
       ) as ProdottoGiacenza[]
 
     setProdotti(prodottiFormattati)
+
+    // Rimuove eventuali quantità rimaste in memoria per prodotti non più attivi.
+    setQuantita((attuali) => {
+      const prossime: Record<string, string> = {}
+
+      prodottiFormattati.forEach((prodotto) => {
+        if (attuali[prodotto.id] !== undefined) {
+          prossime[prodotto.id] = attuali[prodotto.id]
+        }
+      })
+
+      return prossime
+    })
   }
 
   async function controllaBloccoGiacenze(id: string) {
@@ -701,7 +760,7 @@ export default function Giacenze() {
 
                   return (
                     <div
-                      key={`${prodotto.id}-${index}`}
+                      key={prodotto.id}
                       className={`grid grid-cols-[1.2fr_150px_160px_160px_230px] items-center border-b border-slate-100 transition-all duration-300 last:border-b-0 ${
                         modificata
                           ? "bg-blue-50"
@@ -745,7 +804,7 @@ export default function Giacenze() {
 
                   return (
                     <div
-                      key={`${prodotto.id}-${index}`}
+                      key={prodotto.id}
                       className={`rounded-2xl border p-3 shadow-sm transition-all duration-300 ${
                         modificata ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"
                       }`}
