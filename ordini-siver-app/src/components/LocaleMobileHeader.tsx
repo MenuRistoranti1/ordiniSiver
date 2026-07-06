@@ -62,8 +62,7 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
       .eq("user_id", user.id)
       .order("restaurant_name", { ascending: true })
 
-    const locali = data || []
-    setLocaliDisponibili(locali)
+    setLocaliDisponibili((data || []) as LocaleScelta[])
 
     const idSalvato =
       localStorage.getItem("locale_id") ||
@@ -102,6 +101,17 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
     setOpen(false)
 
     window.location.href = "/dashboard"
+  }
+
+  function tornaSceltaLocale() {
+    localStorage.removeItem("locale_id")
+    localStorage.removeItem("locale_nome")
+    localStorage.removeItem("restaurant_name")
+    localStorage.removeItem("locale_scelto")
+
+    setOpen(false)
+    setSelectorAperto(false)
+    window.location.href = "/"
   }
 
   function vai(href: string) {
@@ -177,7 +187,7 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
             {localiDisponibili.length > 1 && (
               <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
                 <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-blue-700">
-                  Cambia locale
+                  Cambia locale rapido
                 </p>
 
                 <div className="relative">
@@ -244,8 +254,15 @@ export function LocaleMobileHeader({ unreadCount = 0 }: Props) {
             </div>
 
             <button
+              onClick={tornaSceltaLocale}
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-black text-white"
+            >
+              Cambia locale
+            </button>
+
+            <button
               onClick={esci}
-              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-black text-white"
+              className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-black text-white"
             >
               <LogOut className="h-4 w-4" />
               Logout
