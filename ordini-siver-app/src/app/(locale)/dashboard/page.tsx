@@ -737,6 +737,44 @@ export default function Dashboard() {
           <div className="mx-auto w-full max-w-7xl space-y-4">
             <LocaleMobileHeader unreadCount={messaggiNonLetti} />
 
+            {localiDisponibili.length > 1 && (
+              <section className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm lg:hidden">
+                <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Locale attivo
+                </p>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setSelectorAperto((value) => !value)}
+                    className="flex w-full items-center justify-between gap-2 rounded-2xl bg-slate-950 px-4 py-4 text-left text-sm font-black text-white"
+                  >
+                    <span className="truncate">
+                      {localeNome || "Seleziona locale"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0" />
+                  </button>
+
+                  {selectorAperto && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl">
+                      {localiDisponibili.map((locale) => (
+                        <button
+                          key={`mobile-${locale.restaurant_id}`}
+                          onClick={() => cambiaLocale(locale)}
+                          className={`w-full px-4 py-3 text-left text-sm font-black hover:bg-blue-50 ${
+                            String(locale.restaurant_id) === String(localeId)
+                              ? "bg-blue-600 text-white hover:bg-blue-600"
+                              : ""
+                          }`}
+                        >
+                          {locale.restaurant_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             <header className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
