@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -10,6 +11,7 @@ import {
   FileText,
   Home,
   LogOut,
+  Menu,
   MessageCircle,
   Package,
   Ruler,
@@ -19,6 +21,7 @@ import {
   Truck,
   Users,
   Warehouse,
+  X,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
@@ -32,17 +35,9 @@ const menuGroups = [
     items: [
       { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
       { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
-      {
-        href: "/admin-soglie-giacenze",
-        label: "Soglie giacenze",
-        icon: SlidersHorizontal,
-      },
+      { href: "/admin-soglie-giacenze", label: "Soglie giacenze", icon: SlidersHorizontal },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
-      {
-        href: "/admin-storico-ordini",
-        label: "Storico ordini",
-        icon: ClipboardList,
-      },
+      { href: "/admin-storico-ordini", label: "Storico ordini", icon: ClipboardList },
     ],
   },
   {
@@ -59,11 +54,7 @@ const menuGroups = [
     title: "Economia",
     items: [
       { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
-      {
-        href: "/admin-storico-fatture",
-        label: "Storico fatture",
-        icon: ClipboardList,
-      },
+      { href: "/admin-storico-fatture", label: "Storico fatture", icon: ClipboardList },
     ],
   },
   {
@@ -78,6 +69,7 @@ const menuGroups = [
 export default function AdminV2Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   async function logout() {
     await supabase.auth.signOut()
@@ -86,8 +78,113 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
     router.replace("/admin")
   }
 
+  function MenuContent({ mobile = false }: { mobile?: boolean }) {
+    return (
+      <>
+        <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+          {menuGroups.map((group) => (
+            <section key={group.title}>
+              <p className="mb-2 px-3 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                {group.title}
+              </p>
+
+              <div className="space-y-2">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  const active =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`)
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => mobile && setMobileOpen(false)}
+                      className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                        active
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-950/40"
+                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span>{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </nav>
+
+        <div className="border-t border-slate-800 p-4">
+          <button
+            onClick={logout}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-red-600 px-5 py-4 text-sm font-extrabold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-700"
+          >
+            <LogOut className="h-5 w-5" />
+            Logout
+          </button>
+        </div>
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <img
+              src="/ordini-siver-logo.png"
+              alt="Ordini Siver"
+              className="h-10 w-10 rounded-xl object-cover"
+            />
+            <div>
+              <p className="text-base font-black text-slate-950">Ordini Siver</p>
+              <p className="text-[11px] font-bold text-slate-500">Area Admin</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white"
+            aria-label="Apri menu admin"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+      </header>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/50 lg:hidden">
+          <div className="ml-auto flex h-full w-[88%] max-w-sm flex-col bg-slate-950 text-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-5">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/ordini-siver-logo.png"
+                  alt="Ordini Siver"
+                  className="h-12 w-12 rounded-2xl object-cover"
+                />
+                <div>
+                  <p className="text-lg font-black">Ordini Siver</p>
+                  <p className="text-xs font-bold text-slate-400">Menu Admin</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white"
+                aria-label="Chiudi menu admin"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <MenuContent mobile />
+          </div>
+        </div>
+      )}
+
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[340px] flex-col border-r border-slate-800 bg-slate-950 text-white lg:flex">
         <div className="border-b border-slate-800 px-7 py-7">
           <div className="flex items-center gap-4">
@@ -103,49 +200,7 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-8 overflow-y-auto px-5 py-6">
-          {menuGroups.map((group) => (
-            <section key={group.title}>
-              <p className="mb-3 px-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                {group.title}
-              </p>
-
-              <div className="space-y-2">
-                {group.items.map((item) => {
-                  const Icon = item.icon
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`)
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-4 rounded-2xl px-5 py-4 text-base font-bold transition ${
-                        active
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-950/40"
-                          : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                      }`}
-                    >
-                      <Icon className="h-6 w-6" />
-                      <span>{item.label}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          ))}
-        </nav>
-
-        <div className="border-t border-slate-800 p-5">
-          <button
-            onClick={logout}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-red-600 px-5 py-4 text-base font-extrabold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-700"
-          >
-            <LogOut className="h-5 w-5" />
-            Logout
-          </button>
-        </div>
+        <MenuContent />
       </aside>
 
       <main className="min-h-screen lg:pl-[340px]">{children}</main>
