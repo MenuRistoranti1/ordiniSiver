@@ -15,6 +15,7 @@ import {
   Search,
   ShoppingCart,
   Truck,
+  Warehouse,
   Users,
   XCircle,
 } from "lucide-react";
@@ -642,6 +643,11 @@ export default function AdminDashboard() {
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {[
                   { label: "Prodotti", icon: Boxes, href: "/admin-prodotti" },
+                  {
+                    label: "Dispersioni",
+                    icon: Warehouse,
+                    href: "/admin-dispersioni",
+                  },
                   { label: "Consegne", icon: Truck, href: "/admin-consegne" },
                   {
                     label: "Ordini",

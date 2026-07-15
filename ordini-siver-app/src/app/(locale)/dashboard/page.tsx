@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardList,
+  FileText,
   Home,
   MessageCircle,
   Package,
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const giacenzeOk = giacenzeInfo.completa;
 
   const [messaggiNonLetti, setMessaggiNonLetti] = useState(0);
+  const [documentiNonLetti, setDocumentiNonLetti] = useState(0);
   const [topOrdinati, setTopOrdinati] = useState<TopItem[]>([]);
   const [topRotti, setTopRotti] = useState<TopItem[]>([]);
   const [totaleOrdini, setTotaleOrdini] = useState(0);
@@ -262,13 +264,26 @@ export default function Dashboard() {
           .eq("settimana_key", settimanaKey),
       ]);
 
-    const totale = (prodottiAttivi || []).filter(
-      (item: any) => item.prodotto_id || item.product_id,
-    ).length;
+    const prodottiUnici = new Set(
+      (prodottiAttivi || [])
+        .map((item: any) =>
+          String(item.prodotto_id || item.product_id || "").trim(),
+        )
+        .filter(Boolean),
+    );
 
-    const compilati = (giacenzeSettimana || []).filter(
-      (item: any) => Number(item.quantita || 0) > 0,
-    ).length;
+    const totale = prodottiUnici.size;
+
+    const prodottiCompilatiUnici = new Set(
+      (giacenzeSettimana || [])
+        .filter((item: any) => Number(item.quantita || 0) > 0)
+        .map((item: any) =>
+          String(item.nome_prodotto || "").trim().toUpperCase(),
+        )
+        .filter(Boolean),
+    );
+
+    const compilati = prodottiCompilatiUnici.size;
 
     const percentuale =
       totale > 0 ? Math.min(100, Math.round((compilati / totale) * 100)) : 0;
@@ -290,6 +305,22 @@ export default function Dashboard() {
       .eq("is_read", false);
 
     setMessaggiNonLetti((data || []).length);
+  }
+
+  async function caricaDocumentiNonLetti(id: string) {
+    const { count, error } = await supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("restaurant_id", id)
+      .eq("read_by_locale", false);
+
+    if (error) {
+      console.error("Errore caricamento documenti non letti:", error);
+      setDocumentiNonLetti(0);
+      return;
+    }
+
+    setDocumentiNonLetti(count || 0);
   }
 
   async function caricaStatisticheLocale(id: string) {
@@ -400,6 +431,7 @@ export default function Dashboard() {
       caricaNomeLocale(id),
       controllaGiacenze(id),
       caricaMessaggiNonLetti(id),
+      caricaDocumentiNonLetti(id),
       caricaStatisticheLocale(id),
     ]);
 
@@ -654,7 +686,9 @@ export default function Dashboard() {
                   onClick={() => setSelectorAperto((value) => !value)}
                   className="flex w-full items-center justify-between gap-2 rounded-2xl bg-slate-800 px-3 py-3 text-left text-sm font-black text-white hover:bg-slate-700"
                 >
-                  <span className="truncate">{localeNome || "Seleziona locale"}</span>
+                  <span className="truncate">
+                    {localeNome || "Seleziona locale"}
+                  </span>
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
 
@@ -716,6 +750,13 @@ export default function Dashboard() {
             />
 
             <SidebarButton
+              label="Documenti"
+              icon={FileText}
+              onClick={() => vai("/documenti")}
+              badge={documentiNonLetti}
+            />
+
+            <SidebarButton
               label="Messaggi admin"
               icon={MessageCircle}
               onClick={() => vai("/messaggi")}
@@ -735,7 +776,10 @@ export default function Dashboard() {
 
         <section className="min-w-0 flex-1 px-3 py-4 sm:px-5 lg:ml-72 lg:px-6 xl:px-8">
           <div className="mx-auto w-full max-w-7xl space-y-4">
-            <LocaleMobileHeader unreadCount={messaggiNonLetti} />
+            <LocaleMobileHeader
+              unreadCount={messaggiNonLetti}
+              documentUnreadCount={documentiNonLetti}
+            />
 
             {localiDisponibili.length > 1 && (
               <section className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm lg:hidden">
@@ -861,7 +905,7 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <KpiCard
                 label="Stato giacenze"
                 value={`${giacenzeInfo.compilati}/${giacenzeInfo.totale}`}
@@ -891,6 +935,22 @@ export default function Dashboard() {
                   messaggiNonLetti > 0
                     ? "bg-red-100 text-red-700"
                     : "bg-slate-100 text-slate-700"
+                }
+              />
+
+              <KpiCard
+                label="Documenti"
+                value={documentiNonLetti}
+                note={
+                  documentiNonLetti > 0
+                    ? "Nuovi da leggere"
+                    : "Nessun nuovo documento"
+                }
+                icon={FileText}
+                color={
+                  documentiNonLetti > 0
+                    ? "bg-red-100 text-red-700"
+                    : "bg-emerald-100 text-emerald-700"
                 }
               />
 
@@ -992,8 +1052,40 @@ export default function Dashboard() {
               </button>
 
               <button
+                onClick={() => vai("/documenti")}
+                className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+                  documentiNonLetti > 0
+                    ? "border-red-200 bg-red-50 hover:border-red-300"
+                    : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Documenti
+                    </p>
+                    <h2 className="mt-2 text-xl font-black text-slate-950">
+                      Documenti locale
+                    </h2>
+                  </div>
+
+                  {documentiNonLetti > 0 && (
+                    <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-black text-white">
+                      {documentiNonLetti} nuovi
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-2 text-sm font-bold text-slate-600">
+                  {documentiNonLetti > 0
+                    ? `Hai ${documentiNonLetti} documenti da leggere.`
+                    : "Nessun nuovo documento. Puoi consultare l'archivio completo."}
+                </p>
+              </button>
+
+              <button
                 onClick={() => vai("/messaggi")}
-                className="rounded-3xl bg-blue-700 p-5 text-left text-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:bg-blue-800 hover:shadow-xl hover:shadow-blue-500/20 xl:col-span-2"
+                className="rounded-3xl bg-blue-700 p-5 text-left text-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:bg-blue-800 hover:shadow-xl hover:shadow-blue-500/20"
               >
                 <p className="text-xs font-black uppercase tracking-wide text-blue-100">
                   Comunicazioni

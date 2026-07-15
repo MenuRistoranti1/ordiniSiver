@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Bell,
+  Boxes,
   Building2,
   ClipboardList,
   FileText,
@@ -35,9 +36,18 @@ const menuGroups = [
     items: [
       { href: "/admin-ordini", label: "Ordini", icon: ShoppingCart },
       { href: "/admin-giacenze", label: "Giacenze", icon: Warehouse },
-      { href: "/admin-soglie-giacenze", label: "Soglie giacenze", icon: SlidersHorizontal },
+      { href: "/admin-dispersioni", label: "Dispersioni", icon: Boxes },
+      {
+        href: "/admin-soglie-giacenze",
+        label: "Soglie giacenze",
+        icon: SlidersHorizontal,
+      },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
-      { href: "/admin-storico-ordini", label: "Storico ordini", icon: ClipboardList },
+      {
+        href: "/admin-storico-ordini",
+        label: "Storico ordini",
+        icon: ClipboardList,
+      },
     ],
   },
   {
@@ -54,7 +64,11 @@ const menuGroups = [
     title: "Economia",
     items: [
       { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
-      { href: "/admin-storico-fatture", label: "Storico fatture", icon: ClipboardList },
+      {
+        href: "/admin-storico-fatture",
+        label: "Storico fatture",
+        icon: ClipboardList,
+      },
     ],
   },
   {
@@ -140,8 +154,12 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
               className="h-10 w-10 rounded-xl object-cover"
             />
             <div>
-              <p className="text-base font-black text-slate-950">Ordini Siver</p>
-              <p className="text-[11px] font-bold text-slate-500">Area Admin</p>
+              <p className="text-base font-black text-slate-950">
+                Ordini Siver
+              </p>
+              <p className="text-[11px] font-bold text-slate-500">
+                Area Admin
+              </p>
             </div>
           </div>
 
@@ -167,7 +185,9 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
                 />
                 <div>
                   <p className="text-lg font-black">Ordini Siver</p>
-                  <p className="text-xs font-bold text-slate-400">Menu Admin</p>
+                  <p className="text-xs font-bold text-slate-400">
+                    Menu Admin
+                  </p>
                 </div>
               </div>
 
