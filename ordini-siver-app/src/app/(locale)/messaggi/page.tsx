@@ -1,260 +1,114 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Menu, X } from "lucide-react"
-import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
-import { supabase } from "@/lib/supabase"
+import { useEffect, useRef } from "react"
+import { MessageCircle, RefreshCw, Send } from "lucide-react"
+import { LocaleShell } from "@/components/locale/LocaleShell"
+import { useLocaleMessages } from "@/hooks/useLocaleMessages"
 
-export default function MessaggiLocale() {
-  const [messaggi, setMessaggi] = useState<any[]>([])
-  const [testo, setTesto] = useState("")
-  const [nomeMittente, setNomeMittente] = useState("")
-  const [localeId, setLocaleId] = useState("")
-  const [localeNome, setLocaleNome] = useState("")
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
+export default function MessaggiLocalePage() {
+  const {
+    messaggi,
+    testo,
+    setTesto,
+    nomeMittente,
+    setNomeMittente,
+    localeId,
+    localeNome,
+    loading,
+    sending,
+    aggiornaMessaggi,
+    inviaMessaggio,
+  } = useLocaleMessages()
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    inizializzaPagina()
-  }, [])
-
-  async function inizializzaPagina() {
-    setLoading(true)
-
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
-
-    if (error || !user) {
-      window.location.href = "/"
-      return
-    }
-
-    if (user.app_metadata?.role !== "locale") {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    const id = String(user.app_metadata?.locale_id || "")
-    const nome = String(user.app_metadata?.locale_nome || "")
-
-    if (!id || !nome) {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    setLocaleId(id)
-    setLocaleNome(nome)
-
-    await caricaMessaggi(id)
-
-    setLoading(false)
-  }
-
-  async function caricaMessaggi(id: string) {
-    if (!id) return
-
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("locale_id", id)
-      .order("created_at", { ascending: true })
-
-    if (error) {
-      console.log(error)
-      alert("Errore caricamento messaggi")
-      return
-    }
-
-    setMessaggi(data || [])
-
-    await supabase
-      .from("messages")
-      .update({ is_read: true })
-      .eq("locale_id", id)
-      .eq("sender", "admin")
-  }
-
-  async function inviaMessaggio() {
-    if (sending) return
-
-    if (!localeId || !localeNome) {
-      alert("Sessione locale non valida. Effettua di nuovo il login.")
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    if (!nomeMittente.trim()) {
-      alert("Inserisci il nome di chi scrive")
-      return
-    }
-
-    if (!testo.trim()) {
-      alert("Scrivi un messaggio")
-      return
-    }
-
-    setSending(true)
-
-    const { error } = await supabase.from("messages").insert({
-      locale_id: localeId,
-      locale_nome: localeNome,
-      sender: "locale",
-      nome_mittente: nomeMittente.trim(),
-      message: testo.trim(),
-      is_read: false,
-    })
-
-    if (error) {
-      console.log(error)
-      alert("Errore invio messaggio")
-      setSending(false)
-      return
-    }
-
-    setTesto("")
-    await caricaMessaggi(localeId)
-    setSending(false)
-  }
-
-  async function logout() {
-    await supabase.auth.signOut()
-    localStorage.removeItem("locale_id")
-    localStorage.removeItem("locale_nome")
-    localStorage.removeItem("restaurant_name")
-    window.location.href = "/"
-  }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messaggi])
 
   return (
-    <main className="min-h-screen bg-slate-100 lg:flex">
-      <button onClick={() => setMenuOpen(true)} className="hidden">
-        <Menu className="h-6 w-6" />
-      </button>
+    <LocaleShell>
+      <header className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+              Comunicazioni
+            </p>
 
-      {menuOpen && (
-        <div
-          onClick={() => setMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-        />
-      )}
-
-      <aside className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col bg-[#07132b] p-6 text-white lg:flex">
-        <button
-          onClick={() => setMenuOpen(false)}
-          className="mb-6 flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-3 text-sm font-bold lg:hidden"
-        >
-          <X className="h-4 w-4" />
-          Chiudi
-        </button>
-
-        <div className="mb-10">
-          <h1 className="text-3xl font-black">OrdiniSiver</h1>
-          <p className="mt-1 text-slate-400">Messaggi</p>
-        </div>
-
-        <nav className="flex-1 space-y-3">
-          <button
-            onClick={() => (window.location.href = "/dashboard")}
-            className="w-full rounded-2xl bg-blue-600 p-4 text-left font-bold"
-          >
-            Dashboard
-          </button>
-
-          <button
-            onClick={() => (window.location.href = "/giacenze")}
-            className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
-          >
-            Giacenze settimana
-          </button>
-
-          <button
-            onClick={() => (window.location.href = "/nuovo-ordine")}
-            className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
-          >
-            Nuovo ordine
-          </button>
-
-          <button
-            onClick={() => (window.location.href = "/storico-giacenze")}
-            className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
-          >
-            Storico giacenze
-          </button>
-
-          <button
-            onClick={() => (window.location.href = "/storico-ordini")}
-            className="w-full rounded-2xl p-4 text-left hover:bg-[#16213f]"
-          >
-            Storico ordini
-          </button>
-
-          <button
-            onClick={() => (window.location.href = "/messaggi")}
-            className="w-full rounded-2xl bg-blue-600 p-4 text-left font-bold"
-          >
-            Messaggi admin
-          </button>
-        </nav>
-
-        <button onClick={logout} className="rounded-2xl bg-red-500 p-4 font-bold">
-          Logout
-        </button>
-      </aside>
-
-      <section className="w-full p-3 pt-4 sm:p-4 lg:ml-72 lg:p-10">
-        <LocaleMobileHeader />
-
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-black text-slate-950 sm:text-5xl">
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
               Messaggi Admin
             </h1>
 
-            <p className="mt-1 text-sm font-bold text-slate-600 sm:text-xl">
-              Locale: {localeNome || "Caricamento..."}
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              {localeNome || "Caricamento..."} · Comunicazioni con
+              l&apos;amministrazione
             </p>
           </div>
 
           <button
-            onClick={() => caricaMessaggi(localeId)}
-            disabled={loading}
-            className="h-12 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white disabled:bg-slate-400"
+            type="button"
+            onClick={() => void aggiornaMessaggi(localeId)}
+            disabled={loading || !localeId}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-400"
           >
-            Aggiorna
+            <RefreshCw
+              className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Aggiorno..." : "Aggiorna"}
           </button>
         </div>
+      </header>
 
-        <div className="rounded-3xl bg-white p-4 shadow-xl sm:p-6">
-          <div className="mb-6 max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-            {loading && (
-              <p className="text-base font-bold text-slate-500">
-                Caricamento messaggi...
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-slate-200 p-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <MessageCircle className="h-6 w-6" />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-black text-slate-950">
+              Conversazione
+            </h2>
+            <p className="text-sm font-bold text-slate-500">
+              I messaggi dell&apos;admin vengono segnati come letti
+              automaticamente.
+            </p>
+          </div>
+        </div>
+
+        <div className="max-h-[55vh] min-h-72 space-y-3 overflow-y-auto bg-slate-50 p-4 sm:p-6">
+          {loading && messaggi.length === 0 && (
+            <p className="text-sm font-bold text-slate-500">
+              Caricamento messaggi...
+            </p>
+          )}
+
+          {!loading && messaggi.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center">
+              <p className="font-black text-slate-800">
+                Nessun messaggio presente
               </p>
-            )}
-
-            {!loading && messaggi.length === 0 && (
-              <p className="text-base font-bold text-slate-500">
-                Nessun messaggio presente.
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                Usa il modulo qui sotto per scrivere all&apos;amministrazione.
               </p>
-            )}
+            </div>
+          )}
 
-            {messaggi.map((msg) => (
-              <div
+          {messaggi.map((msg) => {
+            const inviatoDalLocale = msg.sender === "locale"
+
+            return (
+              <article
                 key={msg.id}
-                className={`max-w-[90%] rounded-2xl p-4 shadow-sm ${
-                  msg.sender === "locale"
+                className={`max-w-[90%] rounded-3xl p-4 shadow-sm sm:max-w-[75%] ${
+                  inviatoDalLocale
                     ? "ml-auto bg-blue-600 text-white"
-                    : "mr-auto bg-slate-200 text-slate-950"
+                    : "mr-auto border border-slate-200 bg-white text-slate-950"
                 }`}
               >
-                <p className="mb-2 text-xs font-black uppercase opacity-80">
-                  {msg.sender === "locale"
-                    ? `${msg.nome_mittente || localeNome}`
+                <p className="mb-2 text-xs font-black uppercase tracking-wide opacity-75">
+                  {inviatoDalLocale
+                    ? msg.nome_mittente || localeNome
                     : "Admin"}
                 </p>
 
@@ -263,44 +117,60 @@ export default function MessaggiLocale() {
                 </p>
 
                 <p
-                  className={`mt-2 text-[10px] font-bold ${
-                    msg.sender === "locale" ? "text-blue-100" : "text-slate-500"
+                  className={`mt-3 text-[11px] font-bold ${
+                    inviatoDalLocale
+                      ? "text-blue-100"
+                      : "text-slate-500"
                   }`}
                 >
-                  {msg.created_at
-                    ? new Date(msg.created_at).toLocaleString("it-IT")
-                    : ""}
+                  {formatDate(msg.created_at)}
                 </p>
-              </div>
-            ))}
-          </div>
+              </article>
+            )
+          })}
 
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="space-y-3 border-t border-slate-200 p-4 sm:p-6">
           <input
             type="text"
-            placeholder="Nome di chi scrive"
             value={nomeMittente}
-            onChange={(e) => setNomeMittente(e.target.value)}
+            onChange={(event) => setNomeMittente(event.target.value)}
+            placeholder="Nome di chi scrive"
             disabled={sending}
-            className="mb-3 h-14 w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-base font-black text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200"
+            className="h-14 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 text-base font-black text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-600 disabled:bg-slate-100"
           />
 
           <textarea
             value={testo}
-            onChange={(e) => setTesto(e.target.value)}
+            onChange={(event) => setTesto(event.target.value)}
             placeholder="Scrivi un messaggio all'admin..."
             disabled={sending}
-            className="mb-3 min-h-[140px] w-full rounded-2xl border-2 border-slate-300 bg-white p-4 text-base font-bold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-600 disabled:bg-slate-200"
+            className="min-h-36 w-full resize-y rounded-2xl border-2 border-slate-200 bg-white p-4 text-base font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-600 disabled:bg-slate-100"
           />
 
           <button
-            onClick={inviaMessaggio}
+            type="button"
+            onClick={() => void inviaMessaggio()}
             disabled={sending || loading}
-            className="h-14 w-full rounded-2xl bg-blue-600 text-base font-black text-white disabled:bg-slate-400"
+            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-base font-black text-white transition hover:bg-blue-700 disabled:bg-slate-400"
           >
+            <Send className="h-5 w-5" />
             {sending ? "Invio in corso..." : "Invia messaggio"}
           </button>
         </div>
       </section>
-    </main>
+    </LocaleShell>
   )
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value))
 }
