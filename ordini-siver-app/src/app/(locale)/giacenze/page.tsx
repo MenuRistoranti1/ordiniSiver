@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import type { LucideIcon } from "lucide-react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,585 +15,59 @@ import {
   User,
   Warehouse,
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { useToast } from "@/components/Toast"
 import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
-
-type ProdottoGiacenza = {
-  id: string
-  nome_prodotto: string
-  supplier_code: string
-  min_stock: number
-  max_stock: number
-}
+import { useLocaleInventory } from "@/hooks/useLocaleInventory"
+import type {
+  InventoryFilter,
+  InventoryProduct,
+  InventorySort,
+  InventoryStatus,
+} from "@/types/inventory"
 
 export default function Giacenze() {
-  const { showToast } = useToast()
-
-  const [prodotti, setProdotti] = useState<ProdottoGiacenza[]>([])
-  const [quantita, setQuantita] = useState<Record<string, string>>({})
-  const [localeId, setLocaleId] = useState("")
-  const [localeNome, setLocaleNome] = useState("")
-  const [operatore, setOperatore] = useState("Operatore")
-  const [blocco, setBlocco] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isDraftSaving, setIsDraftSaving] = useState(false)
-  const [ultimaModifica, setUltimaModifica] = useState<string | null>(null)
-  const [ultimaBozza, setUltimaBozza] = useState<string | null>(null)
-
-  const [ricerca, setRicerca] = useState("")
-  const [filtro, setFiltro] = useState("tutti")
-  const [ordinamento, setOrdinamento] = useState("nome")
-  const [soloDaCompilare, setSoloDaCompilare] = useState(false)
-
-  useEffect(() => {
-    inizializzaPagina()
-  }, [])
-
-  async function inizializzaPagina() {
-    setLoading(true)
-
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
-
-    if (error || !user) {
-      window.location.href = "/"
-      return
-    }
-
-    if (user.app_metadata?.role !== "locale") {
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    const id =
-      localStorage.getItem("locale_id") ||
-      String(user.app_metadata?.locale_id || "")
-
-    const nome =
-      localStorage.getItem("locale_nome") ||
-      String(user.app_metadata?.locale_nome || "")
-
-    if (!id || !nome) {
-      await supabase.auth.signOut()
-      localStorage.removeItem("locale_id")
-      localStorage.removeItem("locale_nome")
-      localStorage.removeItem("locale_scelto")
-      window.location.href = "/"
-      return
-    }
-
-    setLocaleId(id)
-    setLocaleNome(nome)
-    setOperatore(nomeUtenteDaSessione(user))
-
-    await caricaProdotti(id)
-    caricaBozzaGiacenze(id)
-    await controllaBloccoGiacenze(id)
-
-    setLoading(false)
-  }
-
-  function nomeUtenteDaSessione(user: any) {
-    const meta = user?.user_metadata || {}
-    const app = user?.app_metadata || {}
-
-    const nome =
-      meta.full_name ||
-      meta.name ||
-      meta.display_name ||
-      meta.nome ||
-      app.full_name ||
-      app.name ||
-      app.nome ||
-      app.operator_name ||
-      ""
-
-    if (nome && !String(nome).includes("@")) return String(nome).trim()
-
-    const email = String(user?.email || "")
-    const localPart = email.split("@")[0] || "Operatore"
-
-    return localPart
-      .replace(/[._-]+/g, " ")
-      .replace(/\b\w/g, (lettera) => lettera.toUpperCase())
-      .trim()
-  }
-
-  function salutoOrario() {
-    const ora = new Date().getHours()
-
-    if (ora >= 5 && ora < 13) return "Buongiorno"
-    if (ora >= 13 && ora < 18) return "Buon pomeriggio"
-    return "Buonasera"
-  }
-
-  function sabatoCorrente() {
-    const oggi = new Date()
-    const giorno = oggi.getDay()
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1
-    const sabato = new Date(oggi)
-
-    sabato.setDate(oggi.getDate() - diff)
-    sabato.setHours(0, 0, 0, 0)
-
-    return sabato
-  }
-
-  function prossimoSabato() {
-    const sabato = sabatoCorrente()
-    sabato.setDate(sabato.getDate() + 7)
-    return sabato
-  }
-
-  function getSettimanaKey() {
-    return sabatoCorrente().toISOString().split("T")[0]
-  }
-
-  function periodoSettimana() {
-    const inizio = sabatoCorrente()
-    const fine = new Date(inizio)
-    fine.setDate(inizio.getDate() + 6)
-
-    return `${inizio.toLocaleDateString("it-IT", {
-      day: "2-digit",
-      month: "short",
-    })} – ${fine.toLocaleDateString("it-IT", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })}`
-  }
-
-
-  function chiaveBozzaGiacenze(id: string) {
-    return `giacenze_bozza_${id}_${getSettimanaKey()}`
-  }
-
-  function caricaBozzaGiacenze(id: string) {
-    try {
-      const salvata = window.localStorage.getItem(chiaveBozzaGiacenze(id))
-      if (!salvata) return
-
-      const bozza = JSON.parse(salvata) as {
-        quantita?: Record<string, string>
-        salvataAlle?: string
-      }
-
-      if (bozza?.quantita && typeof bozza.quantita === "object") {
-        setQuantita(bozza.quantita)
-      }
-
-      if (bozza?.salvataAlle) {
-        setUltimaBozza(bozza.salvataAlle)
-      }
-    } catch (error) {
-      console.log(error)
-    }
-  }
-
-  function rimuoviBozzaGiacenze(id: string) {
-    window.localStorage.removeItem(chiaveBozzaGiacenze(id))
-    setUltimaBozza(null)
-  }
-
-  async function caricaProdotti(id: string) {
-    const { data: impostazioni, error } = await supabase
-      .from("restaurant_product_settings")
-      .select("id, active, min_stock, max_stock, prodotto_id, product_id")
-      .eq("restaurant_id", id)
-      .eq("active", true)
-
-    if (error) {
-      console.log(error)
-      showToast("Errore caricamento prodotti", "error")
-      return
-    }
-
-    /*
-      FIX DUPLICATI:
-      nella tabella restaurant_product_settings possono esistere più righe attive
-      per lo stesso prodotto/locale, magari una con prodotto_id e una con product_id.
-      Prima di caricare la lista lato locale, normalizziamo l'id prodotto e teniamo
-      una sola impostazione attiva per prodotto.
-
-      Se troviamo doppioni, teniamo la riga con soglie più complete:
-      - preferiamo quella con min_stock/max_stock valorizzati
-      - a parità, teniamo l'ultima incontrata
-    */
-    const impostazioniUnicheMap = new Map<string, any>()
-
-    ;(impostazioni || []).forEach((item: any) => {
-      const idProdotto = String(item.prodotto_id || item.product_id || "").trim()
-      if (!idProdotto) return
-
-      const esistente = impostazioniUnicheMap.get(idProdotto)
-
-      if (!esistente) {
-        impostazioniUnicheMap.set(idProdotto, item)
-        return
-      }
-
-      const scoreEsistente =
-        Number(esistente.min_stock || 0) + Number(esistente.max_stock || 0)
-      const scoreNuovo = Number(item.min_stock || 0) + Number(item.max_stock || 0)
-
-      if (scoreNuovo >= scoreEsistente) {
-        impostazioniUnicheMap.set(idProdotto, item)
-      }
-    })
-
-    const impostazioniUniche = Array.from(impostazioniUnicheMap.values())
-
-    const idsProdotti = Array.from(
-      new Set(
-        impostazioniUniche
-          .map((item: any) => String(item.prodotto_id || item.product_id || "").trim())
-          .filter(Boolean)
-      )
-    )
-
-    if (idsProdotti.length === 0) {
-      setProdotti([])
-      setQuantita({})
-      return
-    }
-
-    const { data: prodottiDb, error: errorProdotti } = await supabase
-      .from("products")
-      .select("id, name, supplier_code, active")
-      .in("id", idsProdotti)
-      .eq("active", true)
-
-    if (errorProdotti) {
-      console.log(errorProdotti)
-      showToast("Errore caricamento prodotti", "error")
-      return
-    }
-
-    const prodottiPuliti = (prodottiDb || []).filter((p: any) => {
-      const nome = String(p.name || "").toUpperCase()
-      const codice = String(p.supplier_code || "").toUpperCase()
-
-      return (
-        !nome.includes("DUPLICATO ARCHIVIATO") &&
-        !nome.includes("[DUPLICATO ARCHIVIATO]") &&
-        !nome.includes("[ARCHIVIATO]") &&
-        !nome.includes("ARCHIVIATO") &&
-        !nome.includes("DUPLICATO") &&
-        !codice.includes("__DUP__")
-      )
-    })
-
-    const prodottiMap = new Map<string, any>()
-
-    prodottiPuliti.forEach((prodotto: any) => {
-      prodottiMap.set(String(prodotto.id), prodotto)
-    })
-
-    const prodottiFormattati = impostazioniUniche
-      .map((item: any) => {
-        const idProdotto = String(item.prodotto_id || item.product_id || "").trim()
-        const prodotto = prodottiMap.get(idProdotto)
-
-        if (!prodotto) return null
-
-        return {
-          id: idProdotto,
-          nome_prodotto: prodotto.name || "Prodotto",
-          supplier_code: prodotto.supplier_code || "-",
-          min_stock: Number(item.min_stock || 0),
-          max_stock: Number(item.max_stock || 0),
-        }
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) =>
-        String(a.nome_prodotto || "").localeCompare(
-          String(b.nome_prodotto || ""),
-          "it",
-          { sensitivity: "base" }
-        )
-      ) as ProdottoGiacenza[]
-
-    setProdotti(prodottiFormattati)
-
-    // Rimuove eventuali quantità rimaste in memoria per prodotti non più attivi.
-    setQuantita((attuali) => {
-      const prossime: Record<string, string> = {}
-
-      prodottiFormattati.forEach((prodotto) => {
-        if (attuali[prodotto.id] !== undefined) {
-          prossime[prodotto.id] = attuali[prodotto.id]
-        }
-      })
-
-      return prossime
-    })
-  }
-
-  async function controllaBloccoGiacenze(id: string) {
-    const settimanaKey = getSettimanaKey()
-    const prossimo = prossimoSabato().toLocaleDateString("it-IT")
-
-    const { data } = await supabase
-      .from("giacenze_settimana")
-      .select("id")
-      .eq("locale_id", id)
-      .eq("settimana_key", settimanaKey)
-      .limit(1)
-
-    if (data && data.length > 0) {
-      setBlocco(
-        `Hai già inviato le giacenze di questa settimana. Potrai inserirle nuovamente da sabato ${prossimo}.`
-      )
-    } else {
-      setBlocco("")
-    }
-  }
-
-  async function aggiornaPagina() {
-    if (!localeId) return
-
-    setLoading(true)
-    await caricaProdotti(localeId)
-    caricaBozzaGiacenze(localeId)
-    await controllaBloccoGiacenze(localeId)
-    setLoading(false)
-    showToast("Giacenze aggiornate", "success")
-  }
-
-  function statoSoglia(prodotto: ProdottoGiacenza) {
-    const valore = quantita[prodotto.id]
-
-    if (valore === undefined || valore === "") return "Da compilare"
-
-    const qta = Number(valore)
-    const min = Number(prodotto.min_stock || 0)
-    const max = Number(prodotto.max_stock || 0)
-
-    if (min > 0 && qta < min) return "Sotto soglia"
-    if (max > 0 && qta > max) return "Sopra soglia"
-
-    return "Corretto"
-  }
-
-  function classeStato(stato: string) {
+  const {
+    localeNome,
+    operatore,
+    blocco,
+    loading,
+    isSaving,
+    isDraftSaving,
+    ultimaModifica,
+    ultimaBozza,
+    quantita,
+    prodottiFiltrati,
+    prodottiTotali,
+    prodottiCompilati,
+    quantitaTotaleCompilata,
+    prodottiSottoSoglia,
+    percentualeCompilazione,
+    ricerca,
+    setRicerca,
+    filtro,
+    setFiltro,
+    ordinamento,
+    setOrdinamento,
+    soloDaCompilare,
+    setSoloDaCompilare,
+    statoSoglia,
+    prodottoCompilato,
+    aggiornaQuantita,
+    cambiaQuantita,
+    aggiornaPagina,
+    salvaBozza,
+    inviaGiacenze,
+    salutoOrario,
+    periodoSettimana,
+  } = useLocaleInventory()
+
+  function classeStato(stato: InventoryStatus) {
     if (stato === "Sotto soglia") return "border-red-200 bg-red-50 text-red-700"
     if (stato === "Sopra soglia") return "border-orange-200 bg-orange-50 text-orange-700"
     if (stato === "Corretto") return "border-green-200 bg-green-50 text-green-700"
     return "border-slate-200 bg-slate-100 text-slate-700"
   }
 
-  function normalizzaQuantitaInput(valore: string) {
-    const soloNumeri = valore.replace(/\D/g, "").slice(0, 4)
-
-    if (soloNumeri === "") return ""
-
-    const numero = Math.min(9999, Math.max(0, Number(soloNumeri)))
-    return String(numero)
-  }
-
-  function aggiornaQuantita(idProdotto: string, valore: string) {
-    const valorePulito = normalizzaQuantitaInput(valore)
-
-    setQuantita((attuali) => ({
-      ...attuali,
-      [idProdotto]: valorePulito,
-    }))
-    setUltimaModifica(idProdotto)
-
-    window.setTimeout(() => {
-      setUltimaModifica((attuale) => (attuale === idProdotto ? null : attuale))
-    }, 450)
-  }
-
-  function cambiaQuantita(idProdotto: string, variazione: number) {
-    const attuale = Number(quantita[idProdotto] || 0)
-    const nuova = Math.min(9999, Math.max(0, attuale + variazione))
-
-    aggiornaQuantita(idProdotto, String(nuova))
-  }
-
-  function prodottoCompilato(prodotto: ProdottoGiacenza) {
-    const valore = quantita[prodotto.id]
-    return valore !== undefined && valore !== ""
-  }
-
-  const prodottiFiltrati = useMemo(() => {
-    let lista = [...prodotti]
-
-    if (ricerca.trim()) {
-      const r = ricerca.toLowerCase()
-      lista = lista.filter(
-        (p) =>
-          p.nome_prodotto?.toLowerCase().includes(r) ||
-          p.supplier_code?.toLowerCase().includes(r)
-      )
-    }
-
-    if (soloDaCompilare) {
-      lista = lista.filter((p) => !prodottoCompilato(p))
-    }
-
-    if (filtro === "compilati") {
-      lista = lista.filter((p) => prodottoCompilato(p))
-    } else if (filtro !== "tutti") {
-      lista = lista.filter((p) => statoSoglia(p) === filtro)
-    }
-
-    if (ordinamento === "nome") {
-      lista.sort((a, b) => a.nome_prodotto.localeCompare(b.nome_prodotto))
-    }
-
-    if (ordinamento === "codice") {
-      lista.sort((a, b) =>
-        (a.supplier_code || "").localeCompare(b.supplier_code || "")
-      )
-    }
-
-    if (ordinamento === "min") {
-      lista.sort((a, b) => Number(b.min_stock || 0) - Number(a.min_stock || 0))
-    }
-
-    if (ordinamento === "max") {
-      lista.sort((a, b) => Number(b.max_stock || 0) - Number(a.max_stock || 0))
-    }
-
-    if (ordinamento === "stato") {
-      const peso: Record<string, number> = {
-        "Sotto soglia": 1,
-        "Da compilare": 2,
-        Corretto: 3,
-        "Sopra soglia": 4,
-      }
-
-      lista.sort((a, b) => peso[statoSoglia(a)] - peso[statoSoglia(b)])
-    }
-
-    return lista
-  }, [prodotti, ricerca, filtro, ordinamento, soloDaCompilare, quantita])
-
-  const prodottiTotali = prodotti.length
-
-  const prodottiCompilati = prodotti.filter((p) => prodottoCompilato(p)).length
-
-  const quantitaTotaleCompilata = prodotti.reduce(
-    (totale, p) => totale + Number(quantita[p.id] || 0),
-    0
-  )
-
-  const prodottiSottoSoglia = prodotti.filter(
-    (p) => statoSoglia(p) === "Sotto soglia"
-  ).length
-
-  const percentualeCompilazione = prodottiTotali
-    ? Math.round((prodottiCompilati / prodottiTotali) * 100)
-    : 0
-
-  async function salvaBozzaGiacenze() {
-    if (isDraftSaving || isSaving) return
-
-    if (!localeId || !localeNome) {
-      showToast("Sessione locale non valida. Effettua di nuovo il login.", "error")
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    setIsDraftSaving(true)
-
-    try {
-      const salvataAlle = new Date().toISOString()
-
-      window.localStorage.setItem(
-        chiaveBozzaGiacenze(localeId),
-        JSON.stringify({
-          locale_id: localeId,
-          locale_nome: localeNome,
-          settimana_key: getSettimanaKey(),
-          quantita,
-          salvataAlle,
-        })
-      )
-
-      setUltimaBozza(salvataAlle)
-      showToast("Bozza giacenze salvata", "success")
-    } catch (error) {
-      console.log(error)
-      showToast("Errore salvataggio bozza", "error")
-    }
-
-    setIsDraftSaving(false)
-  }
-
-  async function inviaGiacenze() {
-    if (isSaving) return
-
-    if (!localeId || !localeNome) {
-      showToast("Sessione locale non valida. Effettua di nuovo il login.", "error")
-      await supabase.auth.signOut()
-      window.location.href = "/"
-      return
-    }
-
-    if (blocco) {
-      showToast(blocco, "warning")
-      return
-    }
-
-    const prodottiMancanti = prodotti.filter((p) => !prodottoCompilato(p))
-
-    if (prodottiMancanti.length > 0) {
-      showToast(
-        `Mancano ${prodottiMancanti.length} prodotti da compilare. Usa il filtro "Da compilare" per vederli.`,
-        "warning"
-      )
-      setSoloDaCompilare(true)
-      setFiltro("Da compilare")
-      return
-    }
-
-    const conferma = window.confirm(
-      `Stai inviando le giacenze definitive per ${prodottiTotali} prodotti, quantità totale ${quantitaTotaleCompilata}. Dopo l'invio non potrai modificarle fino alla prossima settimana. Confermi?`
-    )
-
-    if (!conferma) return
-
-    setIsSaving(true)
-
-    const settimanaKey = getSettimanaKey()
-
-    const righe = prodotti.map((p) => ({
-      locale_id: localeId,
-      locale_nome: localeNome,
-      responsabile: operatore.trim() || "Operatore",
-      nome_prodotto: p.nome_prodotto,
-      quantita: Number(quantita[p.id] || 0),
-      settimana_key: settimanaKey,
-    }))
-
-    const { error } = await supabase.from("giacenze_settimana").insert(righe)
-
-    if (error) {
-      console.log(error)
-      showToast("Errore invio giacenze", "error")
-      setIsSaving(false)
-      return
-    }
-
-    rimuoviBozzaGiacenze(localeId)
-    showToast("Giacenze inviate!", "success")
-
-    setTimeout(() => {
-      window.location.href = "/dashboard"
-    }, 800)
-  }
-
-  function renderQuantitaControl(prodotto: ProdottoGiacenza) {
+  function renderQuantitaControl(prodotto: InventoryProduct) {
     return (
       <div className="flex items-center justify-end gap-2">
         <button
@@ -641,7 +115,7 @@ export default function Giacenze() {
     label: string
     value: string | number
     note: string
-    icon: any
+    icon: LucideIcon
     tone: string
   }) {
     return (
@@ -799,7 +273,7 @@ export default function Giacenze() {
 
             <select
               value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
+              onChange={(e) => setFiltro(e.target.value as InventoryFilter)}
               className="h-14 rounded-2xl border-2 border-slate-200 bg-white px-4 text-base font-bold text-slate-950 outline-none focus:border-blue-600"
             >
               <option value="tutti">Tutti i prodotti</option>
@@ -812,7 +286,7 @@ export default function Giacenze() {
 
             <select
               value={ordinamento}
-              onChange={(e) => setOrdinamento(e.target.value)}
+              onChange={(e) => setOrdinamento(e.target.value as InventorySort)}
               className="h-14 rounded-2xl border-2 border-slate-200 bg-white px-4 text-base font-bold text-slate-950 outline-none focus:border-blue-600"
             >
               <option value="nome">Ordina per nome</option>
@@ -907,7 +381,7 @@ export default function Giacenze() {
               </div>
 
               <div className="space-y-3 p-3 md:hidden">
-                {prodottiFiltrati.map((prodotto, index) => {
+                {prodottiFiltrati.map((prodotto) => {
                   const stato = statoSoglia(prodotto)
                   const modificata = ultimaModifica === prodotto.id
 
@@ -966,7 +440,7 @@ export default function Giacenze() {
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
-              onClick={salvaBozzaGiacenze}
+              onClick={salvaBozza}
               disabled={!!blocco || isDraftSaving || isSaving || loading}
               className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-700 px-6 text-base font-black text-white transition-all hover:bg-slate-600 disabled:bg-slate-500"
             >
