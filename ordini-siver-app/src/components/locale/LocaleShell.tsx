@@ -10,6 +10,7 @@ import {
   LogOut,
   MessageCircle,
   Package,
+  PackageCheck,
   Send,
   Warehouse,
 } from "lucide-react"
@@ -98,6 +99,11 @@ export function LocaleShell({ children }: LocaleShellProps) {
       label: "Nuovo ordine",
       href: "/nuovo-ordine",
       icon: Send,
+    },
+    {
+      label: "Ricezione merce",
+      href: "/ricezione",
+      icon: PackageCheck,
     },
     {
       label: "Storico giacenze",
