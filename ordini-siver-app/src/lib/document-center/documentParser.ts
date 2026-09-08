@@ -132,6 +132,22 @@ export async function leggiRigheInevaso(
   })
 }
 
+/*
+  Secondo formato di inevaso, intestato "Ordine Inevaso". Stesso contenuto del
+  precedente ma tabella diversa: la quantità mancante si chiama RESIDUO, la
+  giacenza del fornitore GIACENZA (da ignorare, come nell'altro formato) e
+  TOT CONS riporta il consegnato nella forma "0 su 36".
+*/
+const COLONNE_ORDINE_INEVASO = [
+  "COD. ARTICOLO",
+  "PRODOTTO",
+  "RESIDUO",
+  "GIACENZA",
+  "TOT CONS",
+  "PREZZO",
+  "TOTALE",
+]
+
 const COLONNE_FATTURA = [
   "CODICE",
   "PRODOTTO",
@@ -201,11 +217,130 @@ export async function leggiRigheFattura(
   })
 }
 
+/** Righe di un "Ordine Inevaso": il residuo è ciò che non è stato consegnato. */
+export async function leggiRigheOrdineInevaso(
+  buffer: Buffer,
+): Promise<RigaDocumento[]> {
+  const righe = raggruppaInRighe(await leggiFrammentiPdf(buffer))
+  const intestazione = trovaColonne(righe, COLONNE_ORDINE_INEVASO)
+
+  if (!intestazione) return []
+
+  const confini = intestazione.posizioni
+
+  const righeDati = righe
+    .filter((riga) => riga.y < intestazione.riga.y)
+    .filter((riga) =>
+      riga.frammenti.some(
+        (f) =>
+          CODICE_ARTICOLO.test(f.testo) &&
+          colonnaPiuVicina(f.x, confini) === "COD. ARTICOLO",
+      ),
+    )
+
+  if (righeDati.length === 0) return []
+
+  const descrizioni = raccogliDescrizioni(
+    righe,
+    righeDati,
+    confini,
+    intestazione.riga.y,
+    "PRODOTTO",
+  )
+
+  return righeDati.map((riga, indice) => {
+    const frammentoNumerico = (colonna: string) =>
+      riga.frammenti.find(
+        (f) =>
+          colonnaPiuVicina(f.x, confini) === colonna &&
+          SOLO_NUMERO.test(f.testo.replace(/[€\s]/g, "")),
+      )
+
+    return {
+      rowNumber: indice + 1,
+      supplierCode:
+        riga.frammenti.find(
+          (f) =>
+            CODICE_ARTICOLO.test(f.testo) &&
+            colonnaPiuVicina(f.x, confini) === "COD. ARTICOLO",
+        )?.testo || null,
+      productName: descrizioni.get(riga.y) || "",
+      quantity: numeroItaliano(frammentoNumerico("RESIDUO")?.testo || "0"),
+      unitPrice: numeroItaliano(frammentoNumerico("PREZZO")?.testo || "0"),
+      totalPrice: numeroItaliano(frammentoNumerico("TOTALE")?.testo || "0"),
+    }
+  })
+}
+
 export type TipoDocumento = "fattura" | "inevaso" | "sconosciuto"
 
 export type DocumentoLetto = {
   tipo: TipoDocumento
   righe: RigaDocumento[]
+  numero: string | null
+  totale: number
+}
+
+/*
+  Numero e totale vanno letti accanto alla loro etichetta, non cercando la
+  parola "TOTALE" nel testo: quella parola compare anche come intestazione di
+  colonna, e sul testo lineare finiva per agganciare cifre di altre righe
+  producendo importi inventati (51.457 € su un inevaso che non ha totali).
+*/
+const ETICHETTE_NUMERO = ["Fattura Accompagnatoria", "Numero"]
+
+const ETICHETTE_TOTALE = [
+  "Totale Fattura",
+  "Totale a Pagare",
+  "Totale Ordine Inevaso",
+]
+
+/*
+  Restituisce i frammenti che stanno a destra di un'etichetta, nella stessa
+  riga. Sulla stessa riga possono trovarsene diversi - accanto al numero della
+  fattura c'è anche la sua data - quindi la scelta viene lasciata a chi chiama.
+*/
+function valoriAccantoA(righe: RigaPdf[], etichetta: string): string[] {
+  for (const riga of righe) {
+    const posizione = riga.frammenti.findIndex(
+      (f) => f.testo.toLowerCase() === etichetta.toLowerCase(),
+    )
+
+    if (posizione === -1) continue
+
+    return riga.frammenti.slice(posizione + 1).map((f) => f.testo)
+  }
+
+  return []
+}
+
+function leggiNumeroDocumento(righe: RigaPdf[]) {
+  // Il numero può avere una lettera finale (19076/26I) o l'anno per esteso
+  // (20493/2026); la data che lo affianca ha due barre e resta esclusa.
+  const formatoNumero = /^\d+\/\d{2,4}[A-Z]?$/i
+
+  for (const etichetta of ETICHETTE_NUMERO) {
+    const valore = valoriAccantoA(righe, etichetta).find((testo) =>
+      formatoNumero.test(testo),
+    )
+
+    if (valore) return valore
+  }
+
+  return null
+}
+
+function leggiTotaleDocumento(righe: RigaPdf[]) {
+  for (const etichetta of ETICHETTE_TOTALE) {
+    for (const valore of valoriAccantoA(righe, etichetta)) {
+      if (!/\d/.test(valore)) continue
+
+      const numero = numeroItaliano(valore)
+      if (numero > 0) return numero
+    }
+  }
+
+  return 0
 }
 
 /**
@@ -221,15 +356,36 @@ export async function leggiDocumento(
 ): Promise<DocumentoLetto> {
   const righe = raggruppaInRighe(await leggiFrammentiPdf(buffer))
 
+  const intestazione = {
+    numero: leggiNumeroDocumento(righe),
+    totale: leggiTotaleDocumento(righe),
+  }
+
   if (trovaColonne(righe, COLONNE_INEVASO)) {
-    return { tipo: "inevaso", righe: await leggiRigheInevaso(buffer) }
+    return {
+      tipo: "inevaso",
+      righe: await leggiRigheInevaso(buffer),
+      ...intestazione,
+    }
+  }
+
+  if (trovaColonne(righe, COLONNE_ORDINE_INEVASO)) {
+    return {
+      tipo: "inevaso",
+      righe: await leggiRigheOrdineInevaso(buffer),
+      ...intestazione,
+    }
   }
 
   if (trovaColonne(righe, COLONNE_FATTURA)) {
-    return { tipo: "fattura", righe: await leggiRigheFattura(buffer) }
+    return {
+      tipo: "fattura",
+      righe: await leggiRigheFattura(buffer),
+      ...intestazione,
+    }
   }
 
-  return { tipo: "sconosciuto", righe: [] }
+  return { tipo: "sconosciuto", righe: [], ...intestazione }
 }
 
 /**

@@ -4,7 +4,9 @@
       "Bash(node -e ' *)",
       "Bash(node /private/tmp/claude-501/-Users-simone-Documents-GitHub-ordiniSiver/5b1187b4-6570-4a7f-adca-0e21e6fd5ec7/scratchpad/pulisci-test.mjs)",
       "Bash(git checkout *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(cat)",
+      "Bash(node /tmp/scarica-nuovo.mjs)"
     ]
   }
 }

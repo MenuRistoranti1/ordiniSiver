@@ -51,11 +51,21 @@ export async function POST(request: Request) {
     const parsed = await pdfParse(buffer)
     const text = normalizeText(parsed.text)
 
+    const {
+      tipo: tipoDocumento,
+      righe: rows,
+      numero: numeroLetto,
+      totale: totaleLetto,
+    } = await leggiDocumento(buffer)
+
     const companyName = findCompanyName(text)
-    const documentNumber = findDocumentNumber(text)
     const documentDate = findDocumentDate(text)
-    const totalAmount = findTotalAmount(text)
-    const { tipo: tipoDocumento, righe: rows } = await leggiDocumento(buffer)
+    const documentNumber = numeroLetto ?? findDocumentNumber(text)
+
+    // Il totale letto accanto alla sua etichetta è affidabile; il vecchio
+    // riconoscimento sul testo produceva importi inesistenti (51.457 € su un
+    // inevaso che non ha totali), quindi non viene più usato.
+    const totalAmount = totaleLetto
 
     let restaurantId: string | null = null
     let restaurantName: string | null = null
@@ -171,14 +181,14 @@ function normalizeText(text: string) {
     .trim()
 }
 
+/*
+  Il nome dell'azienda va confrontato ignorando punteggiatura e spazi: la
+  stessa societa' compare come "P.M.L. SRL" nei collegamenti e come
+  "P.M.& L. S.R.L." sui documenti, e il confronto letterale falliva lasciando
+  il documento senza locale assegnato.
+*/
 function normalizeCompany(value: string) {
-  return value
-    .toUpperCase()
-    .replace(/\./g, "")
-    .replace(/'/g, "")
-    .replace(/’/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "")
 }
 
 function findCompanyName(text: string) {
