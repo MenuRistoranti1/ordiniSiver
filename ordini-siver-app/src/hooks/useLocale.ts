@@ -16,6 +16,16 @@ export function useLocale() {
   }, [])
 
   async function caricaLocale() {
+    try {
+      await verificaUtenteLocale()
+    } catch (errore) {
+      console.log(errore)
+      setStato("error")
+      window.location.href = "/"
+    }
+  }
+
+  async function verificaUtenteLocale() {
     const {
       data: { user },
       error,

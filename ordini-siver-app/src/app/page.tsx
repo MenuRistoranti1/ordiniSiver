@@ -80,32 +80,40 @@ export default function Home() {
   async function controllaSessione() {
     setVerificaSessione(true)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-    if (user?.app_metadata?.role === "locale") {
-      const locali = await caricaLocaliUtente(user)
+      if (user?.app_metadata?.role === "locale") {
+        const locali = await caricaLocaliUtente(user)
 
-      if (locali.length === 1) {
-        entraNelLocale(locali[0])
-        return
+        if (locali.length === 1) {
+          entraNelLocale(locali[0])
+          return
+        }
+
+        if (locali.length > 1) {
+          setUtenteLoggato(user)
+          setLocaliDisponibili(locali)
+          setVerificaSessione(false)
+          return
+        }
+
+        await supabase.auth.signOut()
+        localStorage.removeItem("locale_id")
+        localStorage.removeItem("locale_nome")
+        localStorage.removeItem("locale_scelto")
       }
 
-      if (locali.length > 1) {
-        setUtenteLoggato(user)
-        setLocaliDisponibili(locali)
-        setVerificaSessione(false)
-        return
-      }
-
-      await supabase.auth.signOut()
-      localStorage.removeItem("locale_id")
-      localStorage.removeItem("locale_nome")
-      localStorage.removeItem("locale_scelto")
+      setVerificaSessione(false)
+    } catch (error) {
+      console.log(error)
+      setErrore(
+        "Non riesco a verificare la sessione. Controlla la connessione e riprova.",
+      )
+      setVerificaSessione(false)
     }
-
-    setVerificaSessione(false)
   }
 
   async function entra() {

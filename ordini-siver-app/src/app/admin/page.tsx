@@ -19,20 +19,31 @@ export default function AdminLoginPage() {
     let attivo = true
 
     async function controllaSessione() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
 
-      if (!attivo) return
+        if (!attivo) return
 
-      if (user?.app_metadata?.role === "admin") {
-        router.replace("/admin-dashboard")
-        return
+        if (user?.app_metadata?.role === "admin") {
+          router.replace("/admin-dashboard")
+          return
+        }
+
+        localStorage.removeItem("admin")
+        localStorage.removeItem("admin_mode")
+        setVerificaSessione(false)
+      } catch (error) {
+        console.log(error)
+
+        if (!attivo) return
+
+        setErrore(
+          "Non riesco a verificare la sessione. Controlla la connessione e riprova.",
+        )
+        setVerificaSessione(false)
       }
-
-      localStorage.removeItem("admin")
-      localStorage.removeItem("admin_mode")
-      setVerificaSessione(false)
     }
 
     controllaSessione()
