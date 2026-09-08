@@ -85,6 +85,7 @@ export async function POST(request: Request) {
         .from("documents")
         .update({
           company_name: companyName,
+          document_type: tipoDocumento,
           document_number: documentNumber,
           document_date: documentDate,
           total_amount: totalAmount,

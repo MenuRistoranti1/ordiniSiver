@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import {
+  PackageCheck,
   ChevronDown,
   ClipboardList,
   FileText,
@@ -32,6 +33,7 @@ const links = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
   { label: "Giacenze", href: "/giacenze", icon: Warehouse },
   { label: "Nuovo ordine", href: "/nuovo-ordine", icon: Send },
+  { label: "Ricezione merce", href: "/ricezione", icon: PackageCheck },
   { label: "Storico ordini", href: "/storico-ordini", icon: ClipboardList },
   { label: "Storico giacenze", href: "/storico-giacenze", icon: Package },
   { label: "Documenti", href: "/documenti", icon: FileText },
