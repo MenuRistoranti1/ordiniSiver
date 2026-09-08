@@ -2,7 +2,11 @@
   "crons": [
     {
       "path": "/api/check-missing-orders",
-      "schedule": "0 23 * * 0"
+      "schedule": "0 20 * * 0"
+    },
+    {
+      "path": "/api/check-missing-orders",
+      "schedule": "0 21 * * 0"
     }
   ]
 }

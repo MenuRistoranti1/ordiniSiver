@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import nodemailer from "nodemailer"
+import { oraItaliana, settimanaKeyCorrente } from "@/lib/settimana"
+
+/*
+  Promemoria settimanale: ogni domenica alle 22:00 italiane avvisa i locali
+  che non hanno ancora inviato giacenze e/o ordine della settimana.
+
+  L'Italia cambia fuso due volte l'anno mentre i cron di Vercel girano in UTC,
+  quindi in vercel.json sono pianificate due esecuzioni (20:00 e 21:00 UTC):
+  a seconda del periodo dell'anno una sola delle due cade davvero alle 22:00
+  italiane, l'altra esce subito dal controllo qui sotto senza inviare nulla.
+*/
+const ORA_PROMEMORIA = 22
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,25 +35,38 @@ async function verificaAdmin(req: Request) {
   return !error && data.user?.app_metadata?.role === "admin"
 }
 
-function getSettimanaKey() {
-  const oggi = new Date()
-  const giorno = oggi.getDay()
-  const diff = giorno >= 6 ? giorno - 6 : giorno + 1
+/*
+  Vercel chiama i cron con "Authorization: Bearer <CRON_SECRET>" quando la
+  variabile è impostata sul progetto. Senza questo riconoscimento la chiamata
+  automatica finirebbe sul controllo admin e riceverebbe 401, che è il motivo
+  per cui finora i promemoria partivano solo a mano dalla pagina Alert.
+*/
+function chiamataDalCron(req: Request) {
+  const segreto = process.env.CRON_SECRET
 
-  const sabato = new Date(oggi)
-  sabato.setDate(oggi.getDate() - diff)
-  sabato.setHours(0, 0, 0, 0)
+  if (!segreto) return false
 
-  return sabato.toISOString().split("T")[0]
+  return req.headers.get("authorization") === `Bearer ${segreto}`
 }
 
 export async function GET(req: Request) {
   try {
-    if (!(await verificaAdmin(req))) {
+    const daCron = chiamataDalCron(req)
+
+    if (!daCron && !(await verificaAdmin(req))) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
     }
 
-    const settimanaKey = getSettimanaKey()
+    // L'invio manuale dalla pagina Alert resta possibile a qualsiasi ora.
+    if (daCron && oraItaliana() !== ORA_PROMEMORIA) {
+      return NextResponse.json({
+        success: true,
+        saltato: true,
+        motivo: `Esecuzione fuori orario: in Italia sono le ${oraItaliana()}, i promemoria partono alle ${ORA_PROMEMORIA}.`,
+      })
+    }
+
+    const settimanaKey = settimanaKeyCorrente()
 
     const { data: locali, error: localiError } = await supabase
       .from("restaurants")
