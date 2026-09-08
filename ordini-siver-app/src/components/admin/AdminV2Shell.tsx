@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -86,6 +86,52 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [messaggiNonLetti, setMessaggiNonLetti] = useState(0)
+  const [alertNonLetti, setAlertNonLetti] = useState(0)
+
+  /*
+    Messaggi e alert non letti vanno mostrati nel menu: senza un segno visibile
+    ci si accorge di una segnalazione solo entrando nella pagina. Il conteggio
+    si aggiorna da solo ogni minuto, cosi' resta valido anche restando fermi
+    sulla stessa schermata.
+  */
+  useEffect(() => {
+    let attivo = true
+
+    async function caricaConteggi() {
+      const [messaggi, alert] = await Promise.all([
+        supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("is_read", false)
+          .neq("sender", "admin"),
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("read", false)
+          .is("locale_id", null),
+      ])
+
+      if (!attivo) return
+
+      setMessaggiNonLetti(messaggi.count || 0)
+      setAlertNonLetti(alert.count || 0)
+    }
+
+    void caricaConteggi()
+    const timer = window.setInterval(caricaConteggi, 60000)
+
+    return () => {
+      attivo = false
+      window.clearInterval(timer)
+    }
+  }, [pathname])
+
+  function badgePerVoce(href: string) {
+    if (href === "/admin-messaggi") return messaggiNonLetti
+    if (href === "/admin-alert") return alertNonLetti
+    return 0
+  }
 
   async function logout() {
     await supabase.auth.signOut()
@@ -107,6 +153,7 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
               <div className="space-y-2">
                 {group.items.map((item) => {
                   const Icon = item.icon
+                  const badge = badgePerVoce(item.href)
                   const active =
                     pathname === item.href ||
                     pathname.startsWith(`${item.href}/`)
@@ -123,7 +170,17 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
                       }`}
                     >
                       <Icon className="h-5 w-5" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+
+                      {badge > 0 && (
+                        <span
+                          className={`inline-flex min-w-[22px] items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-black ${
+                            active ? "bg-white text-blue-700" : "bg-red-600 text-white"
+                          }`}
+                        >
+                          {badge > 99 ? "99+" : badge}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}
@@ -167,10 +224,18 @@ export default function AdminV2Shell({ children }: { children: ReactNode }) {
 
           <button
             onClick={() => setMobileOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white"
+            className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white"
             aria-label="Apri menu admin"
           >
             <Menu className="h-5 w-5" />
+
+            {messaggiNonLetti + alertNonLetti > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
+                {messaggiNonLetti + alertNonLetti > 99
+                  ? "99+"
+                  : messaggiNonLetti + alertNonLetti}
+              </span>
+            )}
           </button>
         </div>
       </header>
