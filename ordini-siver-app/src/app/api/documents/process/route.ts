@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import pdfParse from "pdf-parse/lib/pdf-parse"
-import { leggiRigheInevaso } from "@/lib/document-center/documentParser"
+import { leggiDocumento } from "@/lib/document-center/documentParser"
 
 export const runtime = "nodejs"
 
@@ -12,13 +12,6 @@ const supabaseAdmin = createClient(
 
 type ProcessRequest = {
   documentId: string
-}
-
-type ParsedRow = {
-  rowNumber: number
-  supplierCode: string | null
-  productName: string
-  quantity: number
 }
 
 export async function POST(request: Request) {
@@ -62,7 +55,7 @@ export async function POST(request: Request) {
     const documentNumber = findDocumentNumber(text)
     const documentDate = findDocumentDate(text)
     const totalAmount = findTotalAmount(text)
-    const rows = await parseSiverInevasoRows(buffer)
+    const { tipo: tipoDocumento, righe: rows } = await leggiDocumento(buffer)
 
     let restaurantId: string | null = null
     let restaurantName: string | null = null
@@ -130,8 +123,8 @@ export async function POST(request: Request) {
             supplier_code: row.supplierCode,
             product_name: row.productName,
             quantity: row.quantity,
-            unit_price: 0,
-            total_price: 0,
+            unit_price: row.unitPrice ?? 0,
+            total_price: row.totalPrice ?? 0,
             matched_product_id: null,
             matched_product_name: null,
             match_status: "pending",
@@ -148,6 +141,7 @@ export async function POST(request: Request) {
       documentNumber,
       documentDate,
       totalAmount,
+      tipoDocumento,
       rowsInserted: rows.length,
       notified: Boolean(restaurantId),
     })
@@ -254,18 +248,3 @@ function parseItalianNumber(value: string) {
   return Number.isFinite(number) ? number : 0
 }
 
-/*
-  Le righe articolo non si ricavano dal testo lineare: nell'inevaso le colonne
-  "Qtà Inevaso" e "Giac" arrivano incollate ("2-3" sono due valori, non uno).
-  L'estrazione avviene quindi sulle posizioni, in lib/document-center.
-*/
-async function parseSiverInevasoRows(buffer: Buffer): Promise<ParsedRow[]> {
-  const righe = await leggiRigheInevaso(buffer)
-
-  return righe.map((riga) => ({
-    rowNumber: riga.rowNumber,
-    supplierCode: riga.supplierCode,
-    productName: riga.productName,
-    quantity: riga.quantity,
-  }))
-}

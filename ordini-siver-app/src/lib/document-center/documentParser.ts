@@ -201,6 +201,37 @@ export async function leggiRigheFattura(
   })
 }
 
+export type TipoDocumento = "fattura" | "inevaso" | "sconosciuto"
+
+export type DocumentoLetto = {
+  tipo: TipoDocumento
+  righe: RigaDocumento[]
+}
+
+/**
+ * Riconosce da solo se il PDF è una fattura o un inevaso e ne legge le righe.
+ *
+ * Il riconoscimento guarda le intestazioni della tabella, non il nome del
+ * file: un documento rinominato o salvato da un'altra postazione viene letto
+ * lo stesso, e se il formato cambiasse ce ne accorgeremmo subito perché il
+ * tipo tornerebbe "sconosciuto" invece di produrre righe sbagliate.
+ */
+export async function leggiDocumento(
+  buffer: Buffer,
+): Promise<DocumentoLetto> {
+  const righe = raggruppaInRighe(await leggiFrammentiPdf(buffer))
+
+  if (trovaColonne(righe, COLONNE_INEVASO)) {
+    return { tipo: "inevaso", righe: await leggiRigheInevaso(buffer) }
+  }
+
+  if (trovaColonne(righe, COLONNE_FATTURA)) {
+    return { tipo: "fattura", righe: await leggiRigheFattura(buffer) }
+  }
+
+  return { tipo: "sconosciuto", righe: [] }
+}
+
 /**
  * Ricompone la descrizione di ogni articolo: i frammenti della colonna
  * del prodotto vengono attribuiti alla riga dati più vicina in verticale.
