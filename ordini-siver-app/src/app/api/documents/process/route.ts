@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import pdfParse from "pdf-parse/lib/pdf-parse"
+import { leggiRigheInevaso } from "@/lib/document-center/documentParser"
 
 export const runtime = "nodejs"
 
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     const documentNumber = findDocumentNumber(text)
     const documentDate = findDocumentDate(text)
     const totalAmount = findTotalAmount(text)
-    const rows = parseSiverInevasoRows(text)
+    const rows = await parseSiverInevasoRows(buffer)
 
     let restaurantId: string | null = null
     let restaurantName: string | null = null
@@ -253,6 +254,18 @@ function parseItalianNumber(value: string) {
   return Number.isFinite(number) ? number : 0
 }
 
-function parseSiverInevasoRows(text: string): ParsedRow[] {
-  return []
+/*
+  Le righe articolo non si ricavano dal testo lineare: nell'inevaso le colonne
+  "Qtà Inevaso" e "Giac" arrivano incollate ("2-3" sono due valori, non uno).
+  L'estrazione avviene quindi sulle posizioni, in lib/document-center.
+*/
+async function parseSiverInevasoRows(buffer: Buffer): Promise<ParsedRow[]> {
+  const righe = await leggiRigheInevaso(buffer)
+
+  return righe.map((riga) => ({
+    rowNumber: riga.rowNumber,
+    supplierCode: riga.supplierCode,
+    productName: riga.productName,
+    quantity: riga.quantity,
+  }))
 }
