@@ -100,9 +100,7 @@ export function trovaColonne(
 
     for (const etichetta of etichette) {
       const frammento = riga.frammenti.find(
-        (item) =>
-          item.testo.toLowerCase().replace(/\s+/g, " ") ===
-          etichetta.toLowerCase(),
+        (item) => confrontabile(item.testo) === confrontabile(etichetta),
       )
 
       if (frammento) posizioni[etichetta] = frammento.x
@@ -114,6 +112,20 @@ export function trovaColonne(
   }
 
   return null
+}
+
+/*
+  Le intestazioni vanno confrontate ignorando accenti e spaziatura: nelle
+  fatture la colonna è scritta "QTÁ", negli inevasi "Qtà Inevaso", e la
+  codifica degli accenti nei PDF non è sempre la stessa.
+*/
+function confrontabile(valore: string) {
+  return valore
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 /**
