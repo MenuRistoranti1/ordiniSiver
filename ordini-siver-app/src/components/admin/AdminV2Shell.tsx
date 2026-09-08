@@ -44,6 +44,7 @@ const menuGroups = [
         icon: SlidersHorizontal,
       },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
+      { href: "/admin-documenti", label: "Carica documenti", icon: FileText },
       { href: "/admin-ricezioni", label: "Ricezioni", icon: PackageCheck },
       {
         href: "/admin-storico-ordini",
