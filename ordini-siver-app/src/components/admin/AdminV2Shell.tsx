@@ -15,6 +15,7 @@ import {
   Menu,
   MessageCircle,
   Package,
+  PackageCheck,
   Ruler,
   ShoppingCart,
   SlidersHorizontal,
@@ -43,6 +44,7 @@ const menuGroups = [
         icon: SlidersHorizontal,
       },
       { href: "/admin-consegne", label: "Consegne", icon: Truck },
+      { href: "/admin-ricezioni", label: "Ricezioni", icon: PackageCheck },
       {
         href: "/admin-storico-ordini",
         label: "Storico ordini",
