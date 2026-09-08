@@ -5,9 +5,12 @@ import {
   CheckCircle2,
   FileText,
   PackageCheck,
+  Send,
   RefreshCw,
 } from "lucide-react"
 import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
+import { useState } from "react"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import { useLocaleRicezione } from "@/hooks/useLocaleRicezione"
 import type { RigaRicezione } from "@/types/ricezione"
 
@@ -21,11 +24,16 @@ export default function Ricezione() {
     senzaOrdine,
     documenti,
     totali,
+    ultimoSalvataggio,
+    segnalazioneInviata,
+    chiusa,
     cambiaQuantita,
-    confermaRiga,
-    confermaTutte,
+    chiudi,
+    segnalaAdmin,
     ricarica,
   } = useLocaleRicezione()
+
+  const [confermaAperta, setConfermaAperta] = useState(false)
 
   function classeStato(riga: RigaRicezione) {
     if (!riga.validataIl) return "border-slate-200 bg-slate-100 text-slate-700"
@@ -137,19 +145,18 @@ export default function Ricezione() {
             </div>
           ) : (
             <>
-              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.4fr_120px_180px_160px_150px_140px]">
+              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.6fr_120px_190px_170px_170px]">
                 <div className="px-4 py-3">Prodotto</div>
                 <div className="px-4 py-3 text-center">Ordinati</div>
                 <div className="px-4 py-3 text-center">Dai documenti</div>
                 <div className="px-4 py-3 text-center">Arrivati</div>
                 <div className="px-4 py-3 text-center">Stato</div>
-                <div className="px-4 py-3 text-right">Conferma</div>
               </div>
 
               {righe.map((riga, indice) => (
                 <div
                   key={riga.ordineId}
-                  className={`grid grid-cols-1 gap-2 border-b border-slate-100 p-3 last:border-b-0 md:grid-cols-[1.4fr_120px_180px_160px_150px_140px] md:items-center md:gap-0 md:p-0 ${
+                  className={`grid grid-cols-1 gap-2 border-b border-slate-100 p-3 last:border-b-0 md:grid-cols-[1.6fr_120px_190px_170px_170px] md:items-center md:gap-0 md:p-0 ${
                     indice % 2 === 0 ? "bg-white" : "bg-slate-50"
                   }`}
                 >
@@ -176,10 +183,11 @@ export default function Ricezione() {
                       type="text"
                       inputMode="numeric"
                       value={riga.quantitaConsegnata}
+                      disabled={Boolean(riga.validataIl)}
                       onChange={(e) =>
                         cambiaQuantita(riga.ordineId, e.target.value)
                       }
-                      className="h-12 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600"
+                      className="h-12 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
                     />
                   </div>
 
@@ -197,23 +205,6 @@ export default function Ricezione() {
                     )}
                   </div>
 
-                  <div className="md:px-4 md:py-3 md:text-right">
-                    <button
-                      type="button"
-                      onClick={() => void confermaRiga(riga)}
-                      disabled={inSalvataggio !== null}
-                      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:bg-slate-300 md:w-auto"
-                    >
-                      {inSalvataggio === riga.ordineId ? (
-                        "..."
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          Conferma
-                        </>
-                      )}
-                    </button>
-                  </div>
                 </div>
               ))}
             </>
@@ -234,6 +225,20 @@ export default function Ricezione() {
                 </p>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => void segnalaAdmin()}
+              disabled={inSalvataggio !== null || segnalazioneInviata}
+              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-black text-white transition hover:bg-amber-700 disabled:bg-amber-300 sm:w-auto"
+            >
+              <Send className="h-4 w-4" />
+              {segnalazioneInviata
+                ? "Segnalazione inviata"
+                : inSalvataggio === "segnalazione"
+                  ? "Invio in corso..."
+                  : "Segnala all'amministrazione"}
+            </button>
 
             <div className="space-y-2">
               {senzaOrdine.map((riga) => (
@@ -267,26 +272,48 @@ export default function Ricezione() {
               {totali.validate} / {totali.righe}
             </p>
             <p className="text-[11px] font-bold text-slate-400">
-              stai validando come {operatore}
+              {chiusa
+                ? "ricezione chiusa: le quantità non sono più modificabili"
+                : ultimoSalvataggio
+                  ? `salvato in automatico alle ${new Date(ultimoSalvataggio).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })} · ${operatore}`
+                  : `le modifiche si salvano da sole · ${operatore}`}
             </p>
           </div>
 
           <button
-            onClick={() => void confermaTutte()}
-            disabled={inSalvataggio !== null || loading || righe.length === 0}
+            onClick={() => setConfermaAperta(true)}
+            disabled={inSalvataggio !== null || loading || righe.length === 0 || chiusa}
             className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-base font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-500"
           >
-            {inSalvataggio === "tutte" ? (
-              "Validazione..."
+            {inSalvataggio === "chiusura" ? (
+              "Salvataggio..."
+            ) : chiusa ? (
+              <>
+                <CheckCircle2 className="h-5 w-5" />
+                Ricezione chiusa
+              </>
             ) : (
               <>
                 <CheckCircle2 className="h-5 w-5" />
-                Conferma tutte le righe rimaste
+                Salva e chiudi la ricezione
               </>
             )}
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confermaAperta}
+        title="Chiudere la ricezione?"
+        description={`Stai per salvare in via definitiva ${righe.length} righe. Dopo la conferma le quantità non potranno più essere modificate dal locale: controlla che i numeri siano quelli giusti.`}
+        confirmText="Salva definitivamente"
+        cancelText="Continua a modificare"
+        loading={inSalvataggio === "chiusura"}
+        onCancel={() => setConfermaAperta(false)}
+        onConfirm={async () => {
+          setConfermaAperta(false)
+          await chiudi()
+        }}
+      />
     </main>
   )
 }

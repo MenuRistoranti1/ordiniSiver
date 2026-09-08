@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { useToast } from "@/components/Toast"
 import { supabase } from "@/lib/supabase"
 import {
   caricaRicezione,
+  chiudiRicezione,
+  salvaBozzaRiga,
+  segnalaRigheSenzaOrdine,
   statoDaQuantita,
-  validaRigaRicezione,
 } from "@/services/ricezione.service"
 import { settimanaKeyCorrente } from "@/lib/settimana"
 import type { Ricezione, RigaRicezione } from "@/types/ricezione"
@@ -24,12 +26,21 @@ export function useLocaleRicezione() {
     documenti: [],
   })
   const [loading, setLoading] = useState(true)
-  /** Riga attualmente in salvataggio, per bloccare solo quella. */
+  /** Operazione in corso: blocca i pulsanti mentre si scrive sul server. */
   const [inSalvataggio, setInSalvataggio] = useState<string | null>(null)
+  const [ultimoSalvataggio, setUltimoSalvataggio] = useState<string | null>(null)
+  const [segnalazioneInviata, setSegnalazioneInviata] = useState(false)
+
+  const timerBozza = useRef<Record<string, number>>({})
+  const righeRef = useRef<RigaRicezione[]>([])
 
   useEffect(() => {
     void inizializza()
   }, [])
+
+  useEffect(() => {
+    righeRef.current = dati.righe
+  }, [dati.righe])
 
   async function inizializza() {
     setLoading(true)
@@ -82,7 +93,11 @@ export function useLocaleRicezione() {
     }
   }
 
-  /** Modifica locale della quantità, senza toccare il server. */
+  /*
+    La quantità si salva subito sul server, ma come bozza: la riga resta
+    modificabile finché la ricezione non viene chiusa. Il salvataggio è
+    ritardato di 600ms dall'ultima battuta, per non scrivere a ogni cifra.
+  */
   function cambiaQuantita(ordineId: string, valore: string) {
     const numero = Math.max(0, Number(valore.replace(/\D/g, "") || 0))
 
@@ -90,79 +105,98 @@ export function useLocaleRicezione() {
       ...attuali,
       righe: attuali.righe.map((riga) =>
         riga.ordineId === ordineId
-          ? { ...riga, quantitaConsegnata: numero }
+          ? {
+              ...riga,
+              quantitaConsegnata: numero,
+              statoConsegna: statoDaQuantita(riga.quantitaOrdinata, numero),
+            }
           : riga,
       ),
     }))
+
+    const attesa = timerBozza.current[ordineId]
+    if (attesa) window.clearTimeout(attesa)
+
+    timerBozza.current[ordineId] = window.setTimeout(() => {
+      void salvaBozza(ordineId, numero)
+    }, 600)
+  }
+
+  async function salvaBozza(ordineId: string, quantita: number) {
+    const riga = righeRef.current.find((item) => item.ordineId === ordineId)
+    if (!riga || riga.validataIl) return
+
+    try {
+      await salvaBozzaRiga({
+        ordineId,
+        quantitaOrdinata: riga.quantitaOrdinata,
+        quantitaConsegnata: quantita,
+      })
+
+      setUltimoSalvataggio(new Date().toISOString())
+    } catch (errore) {
+      console.log(errore)
+      showToast("Errore nel salvataggio automatico", "error")
+    }
   }
 
   /*
-    La conferma scrive subito sulla riga d'ordine: se il collega apre la
-    schermata mentre il magazzino viene scaricato, deve vedere quello che è
-    già stato controllato e riprendere da lì.
+    Chiusura definitiva. È l'unico passaggio irreversibile per il locale,
+    quindi la pagina la fa precedere da una conferma esplicita.
   */
-  async function confermaRiga(riga: RigaRicezione) {
-    if (inSalvataggio) return
+  async function chiudi() {
+    const daChiudere = dati.righe.filter((riga) => !riga.validataIl)
 
-    setInSalvataggio(riga.ordineId)
+    if (daChiudere.length === 0) {
+      showToast("La ricezione è già stata chiusa", "info")
+      return
+    }
+
+    setInSalvataggio("chiusura")
 
     try {
-      await validaRigaRicezione({
-        ordineId: riga.ordineId,
-        quantitaOrdinata: riga.quantitaOrdinata,
-        quantitaConsegnata: riga.quantitaConsegnata,
+      // Prima si assicura che l'ultima modifica sia sul server, poi firma.
+      for (const riga of daChiudere) {
+        await salvaBozzaRiga({
+          ordineId: riga.ordineId,
+          quantitaOrdinata: riga.quantitaOrdinata,
+          quantitaConsegnata: riga.quantitaConsegnata,
+        })
+      }
+
+      await chiudiRicezione({
+        ordineIds: daChiudere.map((riga) => riga.ordineId),
         operatore,
       })
 
-      setDati((attuali) => ({
-        ...attuali,
-        righe: attuali.righe.map((item) =>
-          item.ordineId === riga.ordineId
-            ? {
-                ...item,
-                statoConsegna: statoDaQuantita(
-                  item.quantitaOrdinata,
-                  item.quantitaConsegnata,
-                ),
-                validataDa: operatore,
-                validataIl: new Date().toISOString(),
-              }
-            : item,
-        ),
-      }))
+      showToast("Ricezione chiusa e salvata", "success")
+      await ricarica()
     } catch (errore) {
       console.log(errore)
-      showToast("Errore nel salvataggio della riga", "error")
+      showToast("Errore durante la chiusura della ricezione", "error")
     } finally {
       setInSalvataggio(null)
     }
   }
 
-  async function confermaTutte() {
-    const daConfermare = dati.righe.filter((riga) => !riga.validataIl)
+  async function segnalaAdmin() {
+    if (dati.senzaOrdine.length === 0) return
 
-    if (daConfermare.length === 0) {
-      showToast("Tutte le righe sono già state validate", "info")
-      return
-    }
-
-    setInSalvataggio("tutte")
+    setInSalvataggio("segnalazione")
 
     try {
-      for (const riga of daConfermare) {
-        await validaRigaRicezione({
-          ordineId: riga.ordineId,
-          quantitaOrdinata: riga.quantitaOrdinata,
-          quantitaConsegnata: riga.quantitaConsegnata,
-          operatore,
-        })
-      }
+      await segnalaRigheSenzaOrdine({
+        localeId,
+        localeNome,
+        operatore,
+        righe: dati.senzaOrdine,
+      })
 
-      showToast(`${daConfermare.length} righe validate`, "success")
-      await ricarica()
+      setSegnalazioneInviata(true)
+      showToast("Segnalazione inviata all'amministrazione", "success")
     } catch (errore) {
       console.log(errore)
-      showToast("Errore durante la validazione", "error")
+      showToast("Errore nell'invio della segnalazione", "error")
     } finally {
       setInSalvataggio(null)
     }
@@ -188,9 +222,12 @@ export function useLocaleRicezione() {
     senzaOrdine: dati.senzaOrdine,
     documenti: dati.documenti,
     totali,
+    ultimoSalvataggio,
+    segnalazioneInviata,
+    chiusa: dati.righe.length > 0 && dati.righe.every((riga) => riga.validataIl),
     cambiaQuantita,
-    confermaRiga,
-    confermaTutte,
+    chiudi,
+    segnalaAdmin,
     ricarica,
   }
 }

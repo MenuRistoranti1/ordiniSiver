@@ -163,25 +163,78 @@ function sommaPerTipo(
   )
 }
 
-export async function validaRigaRicezione(input: {
+/*
+  Le quantità si salvano subito, ma restano modificabili: la firma
+  (consegna_validata_il) resta vuota finché il responsabile non chiude la
+  ricezione. Così il collega che apre la schermata vede il conteggio già
+  fatto, e chi sbaglia un numero può correggerlo finché non si conferma.
+*/
+export async function salvaBozzaRiga(input: {
   ordineId: string
   quantitaOrdinata: number
   quantitaConsegnata: number
-  operatore: string
 }): Promise<void> {
   const consegnata = Math.max(0, input.quantitaConsegnata)
-  const inevasa = Math.max(0, input.quantitaOrdinata - consegnata)
 
   const { error } = await supabase
     .from("ordini")
     .update({
       quantita_consegnata: consegnata,
-      quantita_inevasa: inevasa,
+      quantita_inevasa: Math.max(0, input.quantitaOrdinata - consegnata),
       stato_consegna: statoDaQuantita(input.quantitaOrdinata, consegnata),
+    })
+    .eq("id", input.ordineId)
+    .is("consegna_validata_il", null)
+
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Chiusura definitiva: appone la firma su tutte le righe non ancora validate.
+ * Da qui in avanti le quantità non sono più modificabili dal locale.
+ */
+export async function chiudiRicezione(input: {
+  ordineIds: string[]
+  operatore: string
+}): Promise<void> {
+  if (input.ordineIds.length === 0) return
+
+  const { error } = await supabase
+    .from("ordini")
+    .update({
       consegna_validata_da: input.operatore.trim() || "Operatore",
       consegna_validata_il: new Date().toISOString(),
     })
-    .eq("id", input.ordineId)
+    .in("id", input.ordineIds)
+    .is("consegna_validata_il", null)
+
+  if (error) throw new Error(error.message)
+}
+
+/** Segnala all'amministrazione la merce arrivata senza ordine. */
+export async function segnalaRigheSenzaOrdine(input: {
+  localeId: string
+  localeNome: string
+  operatore: string
+  righe: RigaSenzaOrdine[]
+}): Promise<void> {
+  const elenco = input.righe
+    .map(
+      (riga) =>
+        `• ${riga.supplierCode || "senza codice"} — ${riga.nomeProdotto}: ${riga.quantita} (${riga.tipoDocumento || "documento"} ${riga.documentoNome})`,
+    )
+    .join("\n")
+
+  const testo = `RICEZIONE MERCE — righe senza ordine corrispondente\n\n${elenco}\n\nSegnalazione inviata da ${input.operatore} dalla schermata di ricezione.`
+
+  const { error } = await supabase.from("messages").insert({
+    locale_id: input.localeId,
+    locale_nome: input.localeNome,
+    sender: "locale",
+    nome_mittente: input.operatore.trim() || "Operatore",
+    message: testo,
+    is_read: false,
+  })
 
   if (error) throw new Error(error.message)
 }
