@@ -40,11 +40,59 @@ export function useLocaleInventory() {
   const [ricerca, setRicerca] = useState("")
   const [filtro, setFiltro] = useState<InventoryFilter>("tutti")
   const [ordinamento, setOrdinamento] = useState<InventorySort>("nome")
-  const [soloDaCompilare, setSoloDaCompilare] = useState(false)
+
+  /*
+    Elenco dei prodotti ancora da compilare, congelato nel momento in cui
+    l'utente (o l'invio) attiva la vista "solo da compilare".
+    Se filtrassimo di volta in volta sullo stato attuale, la riga uscirebbe
+    dalla lista alla prima cifra digitata: chi deve scrivere 30 vedrebbe
+    sparire il prodotto appena premuto il 3.
+  */
+  const [idsDaCompletare, setIdsDaCompletare] = useState<string[] | null>(null)
+
+  const soloDaCompilare = idsDaCompletare !== null
+
+  const [bozzaPronta, setBozzaPronta] = useState(false)
 
   useEffect(() => {
     void inizializzaPagina()
   }, [])
+
+  /*
+    Salvataggio automatico della bozza: le quantità inserite non devono
+    dipendere dal ricordarsi di premere "Salva bozza". Parte solo dopo il
+    caricamento iniziale, per non sovrascrivere con un elenco vuoto una
+    bozza appena ripristinata.
+  */
+  useEffect(() => {
+    if (!bozzaPronta || !localeId || !localeNome) return
+
+    const haValori = Object.values(quantita).some(
+      (valore) => valore !== undefined && valore !== "",
+    )
+
+    if (!haValori) return
+
+    const timer = window.setTimeout(() => {
+      try {
+        const salvataAlle = new Date().toISOString()
+
+        salvaBozzaGiacenze({
+          locale_id: localeId,
+          locale_nome: localeNome,
+          settimana_key: getSettimanaKey(),
+          quantita,
+          salvataAlle,
+        })
+
+        setUltimaBozza(salvataAlle)
+      } catch (errore) {
+        console.log(errore)
+      }
+    }, 800)
+
+    return () => window.clearTimeout(timer)
+  }, [quantita, bozzaPronta, localeId, localeNome])
 
   async function inizializzaPagina() {
     setLoading(true)
@@ -100,6 +148,7 @@ export function useLocaleInventory() {
     await caricaProdotti(id)
     ripristinaBozza(id)
     await controllaBlocco(id)
+    setBozzaPronta(true)
   }
 
   async function caricaProdotti(id: string) {
@@ -191,6 +240,19 @@ export function useLocaleInventory() {
     return valore !== undefined && valore !== ""
   }
 
+  function mostraSoloDaCompilare(attiva: boolean) {
+    if (!attiva) {
+      setIdsDaCompletare(null)
+      return
+    }
+
+    setIdsDaCompletare(
+      prodotti
+        .filter((prodotto) => !prodottoCompilato(prodotto))
+        .map((prodotto) => prodotto.id),
+    )
+  }
+
   function normalizzaQuantitaInput(valore: string) {
     const soloNumeri = valore.replace(/\D/g, "").slice(0, 4)
 
@@ -240,8 +302,8 @@ export function useLocaleInventory() {
       )
     }
 
-    if (soloDaCompilare) {
-      lista = lista.filter((prodotto) => !prodottoCompilato(prodotto))
+    if (idsDaCompletare) {
+      lista = lista.filter((prodotto) => idsDaCompletare.includes(prodotto.id))
     }
 
     if (filtro === "compilati") {
@@ -280,7 +342,7 @@ export function useLocaleInventory() {
     }
 
     return lista
-  }, [prodotti, ricerca, filtro, ordinamento, soloDaCompilare, quantita])
+  }, [prodotti, ricerca, filtro, ordinamento, idsDaCompletare, quantita])
 
   const prodottiTotali = prodotti.length
 
@@ -345,12 +407,12 @@ export function useLocaleInventory() {
 
     if (prodottiMancanti.length > 0) {
       showToast(
-        `Mancano ${prodottiMancanti.length} prodotti da compilare. Usa il filtro "Da compilare" per vederli.`,
+        `Mancano ${prodottiMancanti.length} prodotti da compilare. Te li ho lasciati in elenco: le quantità già inserite restano salvate.`,
         "warning",
       )
 
-      setSoloDaCompilare(true)
-      setFiltro("Da compilare")
+      mostraSoloDaCompilare(true)
+      setFiltro("tutti")
       return
     }
 
@@ -424,7 +486,7 @@ export function useLocaleInventory() {
     ordinamento,
     setOrdinamento,
     soloDaCompilare,
-    setSoloDaCompilare,
+    setSoloDaCompilare: mostraSoloDaCompilare,
 
     statoSoglia,
     prodottoCompilato,
