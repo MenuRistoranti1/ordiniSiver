@@ -1,17 +1,15 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
 import { useToast } from "@/components/Toast"
 import { supabase } from "@/lib/supabase"
 import {
   caricaRicezione,
-  chiudiRicezione,
-  salvaBozzaRiga,
+  registraConsegna,
   segnalaRigheSenzaOrdine,
   statoDaQuantita,
 } from "@/services/ricezione.service"
-import { settimanaKeyCorrente } from "@/lib/settimana"
 import type { Ricezione, RigaRicezione } from "@/types/ricezione"
 
 export function useLocaleRicezione() {
@@ -26,21 +24,12 @@ export function useLocaleRicezione() {
     documenti: [],
   })
   const [loading, setLoading] = useState(true)
-  /** Operazione in corso: blocca i pulsanti mentre si scrive sul server. */
   const [inSalvataggio, setInSalvataggio] = useState<string | null>(null)
-  const [ultimoSalvataggio, setUltimoSalvataggio] = useState<string | null>(null)
   const [segnalazioneInviata, setSegnalazioneInviata] = useState(false)
-
-  const timerBozza = useRef<Record<string, number>>({})
-  const righeRef = useRef<RigaRicezione[]>([])
 
   useEffect(() => {
     void inizializza()
   }, [])
-
-  useEffect(() => {
-    righeRef.current = dati.righe
-  }, [dati.righe])
 
   async function inizializza() {
     setLoading(true)
@@ -86,7 +75,7 @@ export function useLocaleRicezione() {
     if (!id) return
 
     try {
-      setDati(await caricaRicezione(id, settimanaKeyCorrente()))
+      setDati(await caricaRicezione(id))
     } catch (errore) {
       console.log(errore)
       showToast("Errore nel caricamento dei dati di ricezione", "error")
@@ -94,9 +83,9 @@ export function useLocaleRicezione() {
   }
 
   /*
-    La quantità si salva subito sul server, ma come bozza: la riga resta
-    modificabile finché la ricezione non viene chiusa. Il salvataggio è
-    ritardato di 600ms dall'ultima battuta, per non scrivere a ogni cifra.
+    La quantità in arrivo resta locale finché non si conferma: qui si registra
+    una consegna, cioè un fatto, e un fatto va scritto quando l'operatore dice
+    che è così, non mentre sta ancora contando.
   */
   function cambiaQuantita(ordineId: string, valore: string) {
     const numero = Math.max(0, Number(valore.replace(/\D/g, "") || 0))
@@ -104,76 +93,63 @@ export function useLocaleRicezione() {
     setDati((attuali) => ({
       ...attuali,
       righe: attuali.righe.map((riga) =>
-        riga.ordineId === ordineId
-          ? {
-              ...riga,
-              quantitaConsegnata: numero,
-              statoConsegna: statoDaQuantita(riga.quantitaOrdinata, numero),
-            }
-          : riga,
+        riga.ordineId === ordineId ? { ...riga, inArrivo: numero } : riga,
       ),
     }))
-
-    const attesa = timerBozza.current[ordineId]
-    if (attesa) window.clearTimeout(attesa)
-
-    timerBozza.current[ordineId] = window.setTimeout(() => {
-      void salvaBozza(ordineId, numero)
-    }, 600)
   }
 
-  async function salvaBozza(ordineId: string, quantita: number) {
-    const riga = righeRef.current.find((item) => item.ordineId === ordineId)
-    if (!riga || riga.validataIl) return
+  async function confermaRiga(riga: RigaRicezione) {
+    if (inSalvataggio) return
+
+    setInSalvataggio(riga.ordineId)
 
     try {
-      await salvaBozzaRiga({
-        ordineId,
+      await registraConsegna({
+        ordineId: riga.ordineId,
         quantitaOrdinata: riga.quantitaOrdinata,
-        quantitaConsegnata: quantita,
-      })
-
-      setUltimoSalvataggio(new Date().toISOString())
-    } catch (errore) {
-      console.log(errore)
-      showToast("Errore nel salvataggio automatico", "error")
-    }
-  }
-
-  /*
-    Chiusura definitiva. È l'unico passaggio irreversibile per il locale,
-    quindi la pagina la fa precedere da una conferma esplicita.
-  */
-  async function chiudi() {
-    const daChiudere = dati.righe.filter((riga) => !riga.validataIl)
-
-    if (daChiudere.length === 0) {
-      showToast("La ricezione è già stata chiusa", "info")
-      return
-    }
-
-    setInSalvataggio("chiusura")
-
-    try {
-      // Prima si assicura che l'ultima modifica sia sul server, poi firma.
-      for (const riga of daChiudere) {
-        await salvaBozzaRiga({
-          ordineId: riga.ordineId,
-          quantitaOrdinata: riga.quantitaOrdinata,
-          quantitaConsegnata: riga.quantitaConsegnata,
-        })
-      }
-
-      await chiudiRicezione({
-        ordineIds: daChiudere.map((riga) => riga.ordineId),
+        giaRicevuta: riga.giaRicevuta,
+        inArrivo: riga.inArrivo,
         operatore,
+        documentRowIds: riga.documentRowIds,
       })
 
-      showToast("Ricezione chiusa e salvata", "success")
       await ricarica()
     } catch (errore) {
       console.log(errore)
-      showToast("Errore durante la chiusura della ricezione", "error")
+      showToast("Errore nel salvataggio della consegna", "error")
+    } finally {
+      setInSalvataggio(null)
+    }
+  }
+
+  /** Registra in blocco tutte le righe con una quantità in arrivo. */
+  async function confermaTutte() {
+    const daRegistrare = dati.righe.filter((riga) => riga.inArrivo > 0)
+
+    if (daRegistrare.length === 0) {
+      showToast("Nessuna quantità da registrare", "info")
+      return
+    }
+
+    setInSalvataggio("tutte")
+
+    try {
+      for (const riga of daRegistrare) {
+        await registraConsegna({
+          ordineId: riga.ordineId,
+          quantitaOrdinata: riga.quantitaOrdinata,
+          giaRicevuta: riga.giaRicevuta,
+          inArrivo: riga.inArrivo,
+          operatore,
+          documentRowIds: riga.documentRowIds,
+        })
+      }
+
+      showToast(`${daRegistrare.length} righe registrate`, "success")
+      await ricarica()
+    } catch (errore) {
+      console.log(errore)
+      showToast("Errore durante la registrazione", "error")
     } finally {
       setInSalvataggio(null)
     }
@@ -204,13 +180,10 @@ export function useLocaleRicezione() {
 
   const totali = {
     righe: dati.righe.length,
-    validate: dati.righe.filter((riga) => riga.validataIl).length,
-    conDifferenza: dati.righe.filter(
-      (riga) => riga.quantitaConsegnata !== riga.quantitaOrdinata,
-    ).length,
-    senzaDocumento: dati.righe.filter(
-      (riga) => riga.daFattura === null && riga.daInevaso === null,
-    ).length,
+    daRicevere: dati.righe.reduce((somma, riga) => somma + riga.residuo, 0),
+    conProposta: dati.righe.filter((riga) => riga.propostaDaDocumenti > 0)
+      .length,
+    inRitardo: dati.righe.filter((riga) => riga.settimaneDiAttesa >= 2).length,
   }
 
   return {
@@ -222,11 +195,11 @@ export function useLocaleRicezione() {
     senzaOrdine: dati.senzaOrdine,
     documenti: dati.documenti,
     totali,
-    ultimoSalvataggio,
     segnalazioneInviata,
-    chiusa: dati.righe.length > 0 && dati.righe.every((riga) => riga.validataIl),
+    statoDaQuantita,
     cambiaQuantita,
-    chiudi,
+    confermaRiga,
+    confermaTutte,
     segnalaAdmin,
     ricarica,
   }

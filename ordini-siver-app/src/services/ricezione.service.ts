@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { settimanaKeyCorrente } from "@/lib/settimana"
 import type {
   DocumentoRicezione,
   Ricezione,
@@ -8,99 +9,142 @@ import type {
 } from "@/types/ricezione"
 
 /*
-  La ricezione mette a confronto tre cose per lo stesso locale e la stessa
-  settimana: le righe ordinate, quanto la fattura dice sia arrivato e quanto
-  l'inevaso dice manchi. L'abbinamento passa dal codice fornitore, l'unico
-  dato presente sia negli ordini sia nei documenti.
+  Ricezione merce: confronto fra ciò che è stato ordinato e ciò che il
+  fornitore ha davvero consegnato.
 
-  Tutto quello che il responsabile conferma finisce sulle righe d'ordine, non
-  in memoria del browser: nello stesso locale chi ordina e chi riceve la merce
-  sono spesso persone diverse, e il lavoro di uno deve essere visibile all'altro.
+  Il conto non si chiude dentro la settimana. Un prodotto ordinato e non
+  consegnato resta inevaso e può arrivare settimane dopo, dentro una fattura
+  che non corrisponde a nessun ordine recente: se guardassimo solo la settimana
+  corrente, quella consegna finirebbe fra la "merce non ordinata" e l'ordine
+  vecchio resterebbe apertosine die.
+
+  Per questo le quantità dei documenti vengono imputate alle righe d'ordine
+  ancora aperte, dalla più vecchia alla più recente. Solo ciò che avanza, e
+  che quindi non era stato ordinato da nessuno, viene segnalato a parte.
+
+  Ogni riga di documento già conteggiata viene marcata (matched_order_id), così
+  la stessa fattura non viene sommata due volte alle riaperture successive.
 */
 
-export async function caricaRicezione(
-  localeId: string,
-  settimanaKey: string,
-): Promise<Ricezione> {
+const SETTIMANA_MS = 7 * 24 * 60 * 60 * 1000
+
+export async function caricaRicezione(localeId: string): Promise<Ricezione> {
   const [ordini, documenti] = await Promise.all([
-    caricaOrdiniSettimana(localeId, settimanaKey),
+    caricaOrdiniAperti(localeId),
     caricaDocumentiLocale(localeId),
   ])
 
-  const idsDocumenti = documenti.map((documento) => documento.id)
-  const righeDocumento = await caricaRigheDocumenti(idsDocumenti)
+  const righeDocumento = await caricaRigheDaConteggiare(
+    documenti.map((documento) => documento.id),
+  )
 
   const tipoPerDocumento = new Map(
-    documenti.map((documento) => [
-      String(documento.id),
-      String(documento.document_type || ""),
-    ]),
+    documenti.map((d) => [String(d.id), String(d.document_type || "")]),
   )
-
   const nomePerDocumento = new Map(
-    documenti.map((documento) => [
-      String(documento.id),
-      String(documento.file_name || "Documento"),
-    ]),
+    documenti.map((d) => [String(d.id), String(d.file_name || "Documento")]),
   )
 
-  const abbinate = new Set<string>()
+  // Solo le fatture dicono cosa è arrivato: l'inevaso elenca ciò che manca,
+  // e sommarlo alle consegne significherebbe contare la merce non arrivata.
+  const daFatture = righeDocumento.filter(
+    (riga) => tipoPerDocumento.get(String(riga.document_id)) === "fattura",
+  )
 
-  const righe: RigaRicezione[] = ordini.map((ordine) => {
-    const codice = normalizzaCodice(ordine.supplier_code)
+  const disponibili = new Map<string, { quantita: number; ids: string[] }>()
 
-    const corrispondenti = righeDocumento.filter(
-      (riga) => codice && normalizzaCodice(riga.supplier_code) === codice,
-    )
+  for (const riga of daFatture) {
+    const codice = normalizzaCodice(riga.supplier_code)
+    if (!codice) continue
 
-    corrispondenti.forEach((riga) => abbinate.add(String(riga.id)))
+    const voce = disponibili.get(codice) || { quantita: 0, ids: [] }
+    voce.quantita += Number(riga.quantity || 0)
+    voce.ids.push(String(riga.id))
+    disponibili.set(codice, voce)
+  }
 
-    const daFattura = sommaPerTipo(
-      corrispondenti,
-      tipoPerDocumento,
-      "fattura",
-    )
+  const oggi = Date.now()
 
-    const daInevaso = sommaPerTipo(
-      corrispondenti,
-      tipoPerDocumento,
-      "inevaso",
-    )
+  // Le righe più vecchie hanno la precedenza: la merce che arriva copre prima
+  // gli ordini rimasti indietro.
+  const aperti = [...ordini].sort((a, b) =>
+    String(a.settimana_key || "").localeCompare(String(b.settimana_key || "")),
+  )
 
+  const righe: RigaRicezione[] = aperti.map((ordine) => {
     const quantitaOrdinata = Number(ordine.quantita || 0)
+    const giaRicevuta = Number(ordine.quantita_consegnata || 0)
+    const residuo = Math.max(0, quantitaOrdinata - giaRicevuta)
+
+    const codice = normalizzaCodice(ordine.supplier_code)
+    const voce = codice ? disponibili.get(codice) : undefined
+
+    let proposta = 0
+    let documentRowIds: string[] = []
+
+    if (voce && voce.quantita > 0 && residuo > 0) {
+      proposta = Math.min(residuo, voce.quantita)
+      documentRowIds = [...voce.ids]
+
+      // Quanto imputato qui non è più disponibile per le righe successive.
+      voce.quantita -= proposta
+    }
+
+    const settimana = String(ordine.settimana_key || "")
+    const attesa = settimana
+      ? Math.max(
+          0,
+          Math.floor((oggi - new Date(settimana).getTime()) / SETTIMANA_MS),
+        )
+      : 0
 
     return {
       ordineId: String(ordine.id),
       nomeProdotto: String(ordine.nome_prodotto || "Prodotto"),
       supplierCode: String(ordine.supplier_code || ""),
+      settimanaOrdine: settimana,
+      settimaneDiAttesa: attesa,
       quantitaOrdinata,
-      daFattura,
-      daInevaso,
-      quantitaConsegnata: quantitaProposta(ordine, {
-        quantitaOrdinata,
-        daFattura,
-        daInevaso,
-      }),
-      statoConsegna: (ordine.stato_consegna ||
-        "da_consegnare") as StatoConsegna,
+      giaRicevuta,
+      residuo,
+      propostaDaDocumenti: proposta,
+      inArrivo: proposta,
+      statoConsegna: (ordine.stato_consegna || "da_consegnare") as StatoConsegna,
       validataDa: ordine.consegna_validata_da || null,
       validataIl: ordine.consegna_validata_il || null,
+      documentRowIds,
     }
   })
 
-  const senzaOrdine: RigaSenzaOrdine[] = righeDocumento
-    .filter((riga) => !abbinate.has(String(riga.id)))
-    .map((riga) => ({
+  // Ciò che resta dopo l'imputazione non era stato ordinato da nessuno.
+  const senzaOrdine: RigaSenzaOrdine[] = []
+
+  for (const riga of righeDocumento) {
+    const tipo = tipoPerDocumento.get(String(riga.document_id)) || ""
+    const codice = normalizzaCodice(riga.supplier_code)
+    const voce = codice ? disponibili.get(codice) : undefined
+
+    const avanzata = tipo === "fattura" ? (voce?.quantita ?? 0) : 0
+    const nonOrdinata = tipo === "fattura" && (!codice || avanzata > 0)
+
+    if (!nonOrdinata) continue
+
+    senzaOrdine.push({
       documentRowId: String(riga.id),
       documentoNome: nomePerDocumento.get(String(riga.document_id)) || "",
-      tipoDocumento: tipoPerDocumento.get(String(riga.document_id)) || "",
+      tipoDocumento: tipo,
       supplierCode: riga.supplier_code || null,
       nomeProdotto: String(riga.product_name || "Prodotto"),
-      quantita: Number(riga.quantity || 0),
-    }))
+      quantita: avanzata || Number(riga.quantity || 0),
+    })
+
+    if (voce) voce.quantita = 0
+  }
+
+  const idsImputate = new Set(righe.flatMap((riga) => riga.documentRowIds))
 
   const riepilogo: DocumentoRicezione[] = documenti.map((documento) => {
-    const righeDelDocumento = righeDocumento.filter(
+    const suoi = righeDocumento.filter(
       (riga) => String(riga.document_id) === String(documento.id),
     )
 
@@ -110,10 +154,9 @@ export async function caricaRicezione(
       tipo: String(documento.document_type || "sconosciuto"),
       dataDocumento: documento.document_date || null,
       numeroDocumento: documento.document_number || null,
-      righeTotali: righeDelDocumento.length,
-      righeAbbinate: righeDelDocumento.filter((riga) =>
-        abbinate.has(String(riga.id)),
-      ).length,
+      righeTotali: suoi.length,
+      righeAbbinate: suoi.filter((riga) => idsImputate.has(String(riga.id)))
+        .length,
     }
   })
 
@@ -121,60 +164,20 @@ export async function caricaRicezione(
 }
 
 /**
- * Valore proposto al responsabile: se la riga è già stata validata si mostra
- * quello confermato, altrimenti si parte dai documenti. La fattura dice cosa è
- * arrivato; se c'è solo l'inevaso, si ricava per differenza dall'ordinato.
+ * Registra una consegna su una riga d'ordine, sommandola a quelle precedenti.
+ * La riga resta aperta finché l'ordinato non è coperto: così un inevaso può
+ * chiudersi con una consegna di settimane dopo.
  */
-function quantitaProposta(
-  ordine: Record<string, unknown>,
-  dati: {
-    quantitaOrdinata: number
-    daFattura: number | null
-    daInevaso: number | null
-  },
-) {
-  if (ordine.consegna_validata_il) {
-    return Number(ordine.quantita_consegnata || 0)
-  }
-
-  if (dati.daFattura !== null) return dati.daFattura
-
-  if (dati.daInevaso !== null) {
-    return Math.max(0, dati.quantitaOrdinata - dati.daInevaso)
-  }
-
-  return 0
-}
-
-function sommaPerTipo(
-  righe: Record<string, unknown>[],
-  tipoPerDocumento: Map<string, string>,
-  tipo: string,
-) {
-  const selezionate = righe.filter(
-    (riga) => tipoPerDocumento.get(String(riga.document_id)) === tipo,
-  )
-
-  if (selezionate.length === 0) return null
-
-  return selezionate.reduce(
-    (somma, riga) => somma + Number(riga.quantity || 0),
-    0,
-  )
-}
-
-/*
-  Le quantità si salvano subito, ma restano modificabili: la firma
-  (consegna_validata_il) resta vuota finché il responsabile non chiude la
-  ricezione. Così il collega che apre la schermata vede il conteggio già
-  fatto, e chi sbaglia un numero può correggerlo finché non si conferma.
-*/
-export async function salvaBozzaRiga(input: {
+export async function registraConsegna(input: {
   ordineId: string
   quantitaOrdinata: number
-  quantitaConsegnata: number
+  giaRicevuta: number
+  inArrivo: number
+  operatore: string
+  documentRowIds: string[]
 }): Promise<void> {
-  const consegnata = Math.max(0, input.quantitaConsegnata)
+  const totale = Math.max(0, input.giaRicevuta + Math.max(0, input.inArrivo))
+  const consegnata = Math.min(totale, input.quantitaOrdinata)
 
   const { error } = await supabase
     .from("ordini")
@@ -182,33 +185,32 @@ export async function salvaBozzaRiga(input: {
       quantita_consegnata: consegnata,
       quantita_inevasa: Math.max(0, input.quantitaOrdinata - consegnata),
       stato_consegna: statoDaQuantita(input.quantitaOrdinata, consegnata),
-    })
-    .eq("id", input.ordineId)
-    .is("consegna_validata_il", null)
-
-  if (error) throw new Error(error.message)
-}
-
-/**
- * Chiusura definitiva: appone la firma su tutte le righe non ancora validate.
- * Da qui in avanti le quantità non sono più modificabili dal locale.
- */
-export async function chiudiRicezione(input: {
-  ordineIds: string[]
-  operatore: string
-}): Promise<void> {
-  if (input.ordineIds.length === 0) return
-
-  const { error } = await supabase
-    .from("ordini")
-    .update({
       consegna_validata_da: input.operatore.trim() || "Operatore",
       consegna_validata_il: new Date().toISOString(),
     })
-    .in("id", input.ordineIds)
-    .is("consegna_validata_il", null)
+    .eq("id", input.ordineId)
 
   if (error) throw new Error(error.message)
+
+  // Marca le righe di documento già conteggiate, perché la prossima apertura
+  // della schermata non le riproponga sommandole di nuovo.
+  if (input.documentRowIds.length > 0) {
+    const { error: erroreRighe } = await supabase
+      .from("document_rows")
+      .update({ matched_order_id: input.ordineId })
+      .in("id", input.documentRowIds)
+
+    if (erroreRighe) throw new Error(erroreRighe.message)
+  }
+}
+
+export function statoDaQuantita(
+  ordinata: number,
+  consegnata: number,
+): StatoConsegna {
+  if (consegnata <= 0) return "da_consegnare"
+  if (consegnata < ordinata) return "parziale"
+  return "consegnato"
 }
 
 /** Segnala all'amministrazione la merce arrivata senza ordine. */
@@ -239,31 +241,25 @@ export async function segnalaRigheSenzaOrdine(input: {
   if (error) throw new Error(error.message)
 }
 
-export function statoDaQuantita(
-  ordinata: number,
-  consegnata: number,
-): StatoConsegna {
-  if (consegnata <= 0) return "da_consegnare"
-  if (consegnata < ordinata) return "parziale"
-  return "consegnato"
-}
-
-async function caricaOrdiniSettimana(
-  localeId: string,
-  settimanaKey: string,
-) {
+/**
+ * Righe d'ordine ancora scoperte, di qualsiasi settimana: è l'elenco di ciò
+ * che il fornitore deve ancora consegnare.
+ */
+async function caricaOrdiniAperti(localeId: string) {
   const { data, error } = await supabase
     .from("ordini")
     .select(
-      "id, nome_prodotto, supplier_code, quantita, quantita_consegnata, stato_consegna, consegna_validata_da, consegna_validata_il",
+      "id, nome_prodotto, supplier_code, quantita, quantita_consegnata, stato_consegna, settimana_key, consegna_validata_da, consegna_validata_il",
     )
     .eq("locale_id", localeId)
-    .eq("settimana_key", settimanaKey)
-    .order("nome_prodotto")
+    .order("settimana_key", { ascending: true })
 
   if (error) throw new Error(error.message)
 
-  return data || []
+  return (data || []).filter(
+    (ordine) =>
+      Number(ordine.quantita || 0) > Number(ordine.quantita_consegnata || 0),
+  )
 }
 
 async function caricaDocumentiLocale(localeId: string) {
@@ -274,20 +270,22 @@ async function caricaDocumentiLocale(localeId: string) {
     )
     .eq("restaurant_id", localeId)
     .order("created_at", { ascending: false })
-    .limit(20)
+    .limit(50)
 
   if (error) throw new Error(error.message)
 
   return data || []
 }
 
-async function caricaRigheDocumenti(idsDocumenti: string[]) {
+/** Solo le righe non ancora imputate a un ordine. */
+async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
   if (idsDocumenti.length === 0) return []
 
   const { data, error } = await supabase
     .from("document_rows")
     .select("id, document_id, supplier_code, product_name, quantity")
     .in("document_id", idsDocumenti)
+    .is("matched_order_id", null)
 
   if (error) throw new Error(error.message)
 
@@ -300,3 +298,5 @@ function normalizzaCodice(valore: unknown) {
     .replace(/\s+/g, "")
     .trim()
 }
+
+export { settimanaKeyCorrente }

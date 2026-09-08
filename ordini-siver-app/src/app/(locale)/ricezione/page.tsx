@@ -1,16 +1,17 @@
 "use client"
 
+import { useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   FileText,
   PackageCheck,
-  Send,
   RefreshCw,
+  Send,
 } from "lucide-react"
-import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
-import { useState } from "react"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
+import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 import { useLocaleRicezione } from "@/hooks/useLocaleRicezione"
 import type { RigaRicezione } from "@/types/ricezione"
 
@@ -24,38 +25,26 @@ export default function Ricezione() {
     senzaOrdine,
     documenti,
     totali,
-    ultimoSalvataggio,
     segnalazioneInviata,
-    chiusa,
     cambiaQuantita,
-    chiudi,
+    confermaRiga,
+    confermaTutte,
     segnalaAdmin,
     ricarica,
   } = useLocaleRicezione()
 
   const [confermaAperta, setConfermaAperta] = useState(false)
 
-  function classeStato(riga: RigaRicezione) {
-    if (!riga.validataIl) return "border-slate-200 bg-slate-100 text-slate-700"
-    if (riga.quantitaConsegnata >= riga.quantitaOrdinata)
-      return "border-green-200 bg-green-50 text-green-700"
-    if (riga.quantitaConsegnata <= 0)
-      return "border-red-200 bg-red-50 text-red-700"
-    return "border-orange-200 bg-orange-50 text-orange-700"
+  function dataOrdine(riga: RigaRicezione) {
+    if (!riga.settimanaOrdine) return "—"
+
+    return new Date(riga.settimanaOrdine).toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "short",
+    })
   }
 
-  function etichettaStato(riga: RigaRicezione) {
-    if (!riga.validataIl) return "Da validare"
-    if (riga.quantitaConsegnata >= riga.quantitaOrdinata) return "Completo"
-    if (riga.quantitaConsegnata <= 0) return "Non arrivato"
-    return "Parziale"
-  }
-
-  function proposta(riga: RigaRicezione) {
-    if (riga.daFattura !== null) return `fattura: ${riga.daFattura}`
-    if (riga.daInevaso !== null) return `inevaso: mancano ${riga.daInevaso}`
-    return "nessun documento"
-  }
+  const daRegistrare = righe.filter((riga) => riga.inArrivo > 0).length
 
   return (
     <main className="min-h-screen bg-slate-100 px-3 pb-32 pt-4 sm:px-5 lg:px-8">
@@ -69,10 +58,10 @@ export default function Ricezione() {
                 Ricezione merce
               </p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Cosa è arrivato davvero
+                Cosa deve ancora arrivare
               </h1>
               <p className="mt-1 text-sm font-bold text-slate-500">
-                {localeNome || "Locale"} · controlla le quantità e conferma
+                {localeNome || "Locale"} · registra le quantità consegnate
               </p>
             </div>
 
@@ -103,7 +92,7 @@ export default function Ricezione() {
                   <FileText className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-950">
-                      {documento.fileName}
+                      {documento.numeroDocumento || documento.fileName}
                     </p>
                     <p className="text-xs font-bold text-slate-500">
                       {documento.tipo} · {documento.righeAbbinate} di{" "}
@@ -117,17 +106,17 @@ export default function Ricezione() {
         )}
 
         <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <Riquadro label="Righe ordine" valore={totali.righe} />
-          <Riquadro label="Validate" valore={totali.validate} />
+          <Riquadro label="Righe aperte" valore={totali.righe} />
+          <Riquadro label="Pezzi da ricevere" valore={totali.daRicevere} />
           <Riquadro
-            label="Con differenza"
-            valore={totali.conDifferenza}
-            allarme={totali.conDifferenza > 0}
+            label="Con consegna proposta"
+            valore={totali.conProposta}
+            evidenzia={totali.conProposta > 0}
           />
           <Riquadro
-            label="Senza documento"
-            valore={totali.senzaDocumento}
-            allarme={totali.senzaDocumento > 0}
+            label="In attesa da 2+ settimane"
+            valore={totali.inRitardo}
+            allarme={totali.inRitardo > 0}
           />
         </section>
 
@@ -140,23 +129,24 @@ export default function Ricezione() {
             <div className="px-4 py-12 text-center">
               <PackageCheck className="mx-auto mb-3 h-10 w-10 text-slate-300" />
               <p className="text-sm font-bold text-slate-500">
-                Nessun ordine da ricevere per questa settimana.
+                Nessun ordine in attesa di consegna.
               </p>
             </div>
           ) : (
             <>
-              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.6fr_120px_190px_170px_170px]">
+              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.5fr_110px_130px_150px_150px_130px]">
                 <div className="px-4 py-3">Prodotto</div>
+                <div className="px-4 py-3 text-center">Ordine</div>
                 <div className="px-4 py-3 text-center">Ordinati</div>
-                <div className="px-4 py-3 text-center">Dai documenti</div>
-                <div className="px-4 py-3 text-center">Arrivati</div>
-                <div className="px-4 py-3 text-center">Stato</div>
+                <div className="px-4 py-3 text-center">Già ricevuti</div>
+                <div className="px-4 py-3 text-center">Arrivati ora</div>
+                <div className="px-4 py-3 text-right">Registra</div>
               </div>
 
               {righe.map((riga, indice) => (
                 <div
                   key={riga.ordineId}
-                  className={`grid grid-cols-1 gap-2 border-b border-slate-100 p-3 last:border-b-0 md:grid-cols-[1.6fr_120px_190px_170px_170px] md:items-center md:gap-0 md:p-0 ${
+                  className={`grid grid-cols-1 gap-2 border-b border-slate-100 p-3 last:border-b-0 md:grid-cols-[1.5fr_110px_130px_150px_150px_130px] md:items-center md:gap-0 md:p-0 ${
                     indice % 2 === 0 ? "bg-white" : "bg-slate-50"
                   }`}
                 >
@@ -167,6 +157,17 @@ export default function Ricezione() {
                     <h3 className="truncate text-sm font-black text-slate-950">
                       {riga.nomeProdotto}
                     </h3>
+
+                    {riga.settimaneDiAttesa >= 2 && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-black uppercase text-amber-700">
+                        <Clock className="h-3 w-3" />
+                        in attesa da {riga.settimaneDiAttesa} settimane
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-xs font-bold text-slate-500 md:px-4 md:py-3 md:text-center">
+                    {dataOrdine(riga)}
                   </div>
 
                   <div className="text-sm font-black text-slate-700 md:px-4 md:py-3 md:text-center">
@@ -174,37 +175,51 @@ export default function Ricezione() {
                     {riga.quantitaOrdinata}
                   </div>
 
-                  <div className="text-xs font-bold text-slate-500 md:px-4 md:py-3 md:text-center">
-                    {proposta(riga)}
+                  <div className="text-sm font-bold text-slate-500 md:px-4 md:py-3 md:text-center">
+                    <span className="md:hidden">Già ricevuti: </span>
+                    {riga.giaRicevuta}
+                    <span className="text-xs"> · mancano {riga.residuo}</span>
                   </div>
 
                   <div className="md:px-4 md:py-3">
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={riga.quantitaConsegnata}
-                      disabled={Boolean(riga.validataIl)}
+                      value={riga.inArrivo}
                       onChange={(e) =>
                         cambiaQuantita(riga.ordineId, e.target.value)
                       }
-                      className="h-12 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600 disabled:bg-slate-100 disabled:text-slate-500"
+                      className={`h-12 w-full rounded-xl border-2 px-3 text-center text-lg font-black text-slate-950 outline-none focus:border-blue-600 ${
+                        riga.propostaDaDocumenti > 0
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-slate-200 bg-white"
+                      }`}
                     />
-                  </div>
 
-                  <div className="md:px-4 md:py-3 md:text-center">
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${classeStato(riga)}`}
-                    >
-                      {etichettaStato(riga)}
-                    </span>
-
-                    {riga.validataDa && (
-                      <p className="mt-1 text-[11px] font-bold text-slate-400">
-                        {riga.validataDa}
+                    {riga.propostaDaDocumenti > 0 && (
+                      <p className="mt-1 text-center text-[10px] font-black uppercase text-blue-600">
+                        da fattura
                       </p>
                     )}
                   </div>
 
+                  <div className="md:px-4 md:py-3 md:text-right">
+                    <button
+                      type="button"
+                      onClick={() => void confermaRiga(riga)}
+                      disabled={inSalvataggio !== null || riga.inArrivo <= 0}
+                      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 md:w-auto"
+                    >
+                      {inSalvataggio === riga.ordineId ? (
+                        "..."
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          Registra
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               ))}
             </>
@@ -217,11 +232,11 @@ export default function Ricezione() {
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
               <div>
                 <p className="text-sm font-black text-amber-900">
-                  Righe nei documenti senza ordine corrispondente
+                  Merce arrivata senza essere stata ordinata
                 </p>
                 <p className="text-xs font-bold text-amber-800">
-                  Merce non ordinata, oppure codice non riconosciuto. Segnalale
-                  all&apos;amministrazione.
+                  Nessun ordine aperto con questo codice, nemmeno delle
+                  settimane precedenti.
                 </p>
               </div>
             </div>
@@ -266,52 +281,44 @@ export default function Ricezione() {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase text-slate-400">
-              Righe validate
+              Righe da registrare
             </p>
             <p className="text-xl font-black">
-              {totali.validate} / {totali.righe}
+              {daRegistrare} / {totali.righe}
             </p>
             <p className="text-[11px] font-bold text-slate-400">
-              {chiusa
-                ? "ricezione chiusa: le quantità non sono più modificabili"
-                : ultimoSalvataggio
-                  ? `salvato in automatico alle ${new Date(ultimoSalvataggio).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })} · ${operatore}`
-                  : `le modifiche si salvano da sole · ${operatore}`}
+              registri come {operatore}
             </p>
           </div>
 
           <button
             onClick={() => setConfermaAperta(true)}
-            disabled={inSalvataggio !== null || loading || righe.length === 0 || chiusa}
+            disabled={inSalvataggio !== null || loading || daRegistrare === 0}
             className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-base font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-500"
           >
-            {inSalvataggio === "chiusura" ? (
-              "Salvataggio..."
-            ) : chiusa ? (
-              <>
-                <CheckCircle2 className="h-5 w-5" />
-                Ricezione chiusa
-              </>
+            {inSalvataggio === "tutte" ? (
+              "Registrazione..."
             ) : (
               <>
                 <CheckCircle2 className="h-5 w-5" />
-                Salva e chiudi la ricezione
+                Registra tutte le consegne
               </>
             )}
           </button>
         </div>
       </div>
+
       <ConfirmDialog
         open={confermaAperta}
-        title="Chiudere la ricezione?"
-        description={`Stai per salvare in via definitiva ${righe.length} righe. Dopo la conferma le quantità non potranno più essere modificate dal locale: controlla che i numeri siano quelli giusti.`}
-        confirmText="Salva definitivamente"
-        cancelText="Continua a modificare"
-        loading={inSalvataggio === "chiusura"}
+        title="Registrare le consegne?"
+        description={`Stai registrando la merce arrivata su ${daRegistrare} righe. Le quantità si sommano a quelle già ricevute e non saranno più modificabili: le righe che restano scoperte continueranno a comparire finché non arriva il resto.`}
+        confirmText="Registra"
+        cancelText="Continua a controllare"
+        loading={inSalvataggio === "tutte"}
         onCancel={() => setConfermaAperta(false)}
         onConfirm={async () => {
           setConfermaAperta(false)
-          await chiudi()
+          await confermaTutte()
         }}
       />
     </main>
@@ -322,10 +329,12 @@ function Riquadro({
   label,
   valore,
   allarme,
+  evidenzia,
 }: {
   label: string
   valore: number
   allarme?: boolean
+  evidenzia?: boolean
 }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -334,7 +343,11 @@ function Riquadro({
       </p>
       <p
         className={`mt-1 text-3xl font-black tracking-tight ${
-          allarme ? "text-amber-600" : "text-slate-950"
+          allarme
+            ? "text-amber-600"
+            : evidenzia
+              ? "text-blue-600"
+              : "text-slate-950"
         }`}
       >
         {valore}
