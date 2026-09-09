@@ -272,6 +272,82 @@ export async function leggiRigheOrdineInevaso(
   })
 }
 
+/*
+  Terzo formato: la fattura elettronica scaricata dal cassetto fiscale, che
+  ha un'impaginazione tutta sua. È una fonte preziosa perché lì ci sono
+  *tutte* le fatture emesse, comprese quelle che non arrivano via mail.
+
+  Rispetto ai documenti Siver le quantità sono decimali all'italiana
+  ("24,00") e ogni riga è seguita da righe di servizio - "(CODICE)",
+  "Tipo dato", "Rif. testo" - che cadono nella colonna della descrizione e
+  vanno tenute fuori.
+*/
+const COLONNE_CASSETTO = [
+  "Cod. articolo",
+  "Descrizione",
+  "Quantità",
+  "Prezzo unitario",
+  "%IVA",
+  "Prezzo totale",
+]
+
+const RIGHE_DI_SERVIZIO = /^\(CODICE\)|^Tipo dato|^Rif\. testo|^Vs\.Ord|^-{3,}/i
+
+export async function leggiRigheFatturaCassetto(
+  buffer: Buffer,
+): Promise<RigaDocumento[]> {
+  const righe = raggruppaInRighe(await leggiFrammentiPdf(buffer))
+  const intestazione = trovaColonne(righe, COLONNE_CASSETTO)
+
+  if (!intestazione) return []
+
+  /*
+    Qui i valori non sono allineati alle intestazioni: la descrizione sta a
+    sinistra della propria colonna e la quantità a destra, tanto che
+    assegnandoli per vicinanza finirebbero nella colonna sbagliata. Si leggono
+    quindi per posizione relativa: codice a sinistra, poi la descrizione, e
+    infine i numeri in fila - quantità, prezzo, IVA, totale - saltando lo
+    sconto, che è l'unico a portare il segno di percentuale.
+  */
+  const FINE_DESCRIZIONE = 270
+
+  const righeDati = righe
+    .filter((riga) => riga.y < intestazione.riga.y)
+    .filter((riga) => riga.frammenti.some((f) => CODICE_ARTICOLO.test(f.testo)))
+
+  return righeDati.map((riga, indice) => {
+    const numeri = riga.frammenti
+      .filter((f) => f.x > FINE_DESCRIZIONE)
+      .filter((f) => !f.testo.includes("%"))
+      .filter((f) => /^[\d.,]+$/.test(f.testo))
+      .sort((a, b) => a.x - b.x)
+      .map((f) => numeroItaliano(f.testo))
+
+    const descrizione = riga.frammenti
+      .filter(
+        (f) =>
+          f.x > 60 &&
+          f.x < FINE_DESCRIZIONE &&
+          !CODICE_ARTICOLO.test(f.testo) &&
+          !RIGHE_DI_SERVIZIO.test(f.testo),
+      )
+      .map((f) => f.testo)
+      .join(" ")
+      .trim()
+
+    return {
+      rowNumber: indice + 1,
+      supplierCode:
+        riga.frammenti.find((f) => CODICE_ARTICOLO.test(f.testo))?.testo || null,
+      productName: descrizione,
+      quantity: numeri[0] ?? 0,
+      unitPrice: numeri[1] ?? 0,
+      // L'ultimo numero della riga è il totale; il penultimo è l'aliquota IVA.
+      totalPrice: numeri.length > 0 ? numeri[numeri.length - 1] : 0,
+    }
+  })
+}
+
 export type TipoDocumento = "fattura" | "inevaso" | "sconosciuto"
 
 export type DocumentoLetto = {
@@ -314,6 +390,48 @@ function valoriAccantoA(righe: RigaPdf[], etichetta: string): string[] {
   return []
 }
 
+/*
+  Nella fattura del cassetto fiscale il valore sta nella riga sotto la sua
+  etichetta, incolonnato con essa, invece che di fianco.
+*/
+function valoreSottoA(
+  righe: RigaPdf[],
+  etichetta: string,
+  accettabile: (testo: string) => boolean = () => true,
+) {
+  const indice = righe.findIndex((riga) =>
+    riga.frammenti.some((f) => f.testo.toLowerCase() === etichetta.toLowerCase()),
+  )
+
+  if (indice === -1) return null
+
+  const riferimento = righe[indice].frammenti.find(
+    (f) => f.testo.toLowerCase() === etichetta.toLowerCase(),
+  )
+
+  if (!riferimento) return null
+
+  /*
+    Si scorrono le righe successive scartando quelle che non contengono un
+    valore accettabile: le intestazioni lunghe vanno a capo ("Numero
+    documento" occupa due righe) e senza questo controllo si prenderebbe la
+    seconda metà dell'etichetta al posto del valore.
+  */
+  for (const riga of righe.slice(indice + 1, indice + 5)) {
+    const vicino = riga.frammenti
+      .filter((f) => Math.abs(f.x - riferimento.x) < 130)
+      .filter((f) => accettabile(f.testo))
+      .sort(
+        (a, b) =>
+          Math.abs(a.x - riferimento.x) - Math.abs(b.x - riferimento.x),
+      )[0]
+
+    if (vicino) return vicino.testo
+  }
+
+  return null
+}
+
 function leggiNumeroDocumento(righe: RigaPdf[]) {
   // Il numero può avere una lettera finale (19076/26I) o l'anno per esteso
   // (20493/2026); la data che lo affianca ha due barre e resta esclusa.
@@ -327,6 +445,12 @@ function leggiNumeroDocumento(righe: RigaPdf[]) {
     if (valore) return valore
   }
 
+  const sotto = valoreSottoA(righe, "Numero documento", (testo) =>
+    formatoNumero.test(testo),
+  )
+
+  if (sotto) return sotto
+
   return null
 }
 
@@ -338,6 +462,15 @@ function leggiTotaleDocumento(righe: RigaPdf[]) {
       const numero = numeroItaliano(valore)
       if (numero > 0) return numero
     }
+  }
+
+  const sotto = valoreSottoA(righe, "Totale documento", (testo) =>
+    /^[\d.,]+$/.test(testo),
+  )
+
+  if (sotto) {
+    const numero = numeroItaliano(sotto)
+    if (numero > 0) return numero
   }
 
   return 0
@@ -381,6 +514,14 @@ export async function leggiDocumento(
     return {
       tipo: "fattura",
       righe: await leggiRigheFattura(buffer),
+      ...intestazione,
+    }
+  }
+
+  if (trovaColonne(righe, COLONNE_CASSETTO)) {
+    return {
+      tipo: "fattura",
+      righe: await leggiRigheFatturaCassetto(buffer),
       ...intestazione,
     }
   }
