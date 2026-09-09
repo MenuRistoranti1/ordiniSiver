@@ -269,7 +269,7 @@ export default function AdminRicezioni() {
                                     </span>
                                   ) : (
                                     <span className="text-[11px] font-bold text-slate-400">
-                                      in corso
+                                      ordine di questa settimana
                                     </span>
                                   )}
                                 </td>
