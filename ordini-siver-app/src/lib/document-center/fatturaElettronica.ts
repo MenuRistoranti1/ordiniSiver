@@ -88,7 +88,22 @@ function valore(contenuto: string, tag: string): string | null {
     new RegExp(`<(?:[\\w-]+:)?${tag}>([\\s\\S]*?)</(?:[\\w-]+:)?${tag}>`),
   )
 
-  return match ? match[1].trim() : null
+  return match ? decodifica(match[1].trim()) : null
+}
+
+/*
+  Nell'XML i caratteri speciali sono codificati: "P.M.& L. S.R.L." arriva come
+  "P.M.&amp; L. S.R.L.". Senza decodifica il nome non corrisponde a quello dei
+  collegamenti azienda-locale e il documento resta senza locale assegnato.
+*/
+function decodifica(testo: string) {
+  return testo
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, codice) => String.fromCharCode(Number(codice)))
 }
 
 function tutti(contenuto: string, tag: string): string[] {
@@ -96,7 +111,7 @@ function tutti(contenuto: string, tag: string): string[] {
     ...contenuto.matchAll(
       new RegExp(`<(?:[\\w-]+:)?${tag}>([\\s\\S]*?)</(?:[\\w-]+:)?${tag}>`, "g"),
     ),
-  ].map((m) => m[1].trim())
+  ].map((m) => decodifica(m[1].trim()))
 }
 
 /** Nell'XML i decimali usano il punto, secondo lo standard. */
