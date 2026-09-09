@@ -109,8 +109,9 @@ export default function AdminRicezioni() {
                 Cosa non è ancora arrivato
               </h1>
               <p className="mt-1 text-sm font-bold text-slate-500">
-                Apri un locale per vedere le righe scoperte. L&apos;arretrato
-                sono gli ordini di settimane passate mai consegnati.
+                Apri un locale per il dettaglio. In rosso ciò che nessuna
+                fattura copre: ordinato nelle settimane passate e mai arrivato.
+                In blu ciò che è arrivato e attende solo la registrazione.
               </p>
             </div>
 
@@ -126,9 +127,10 @@ export default function AdminRicezioni() {
           </div>
 
           {totaleArretrato > 0 && (
-            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-900">
-              Arretrato complessivo: {totaleArretrato} pezzi ordinati nelle
-              settimane precedenti e non ancora consegnati.
+            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-900">
+              {totaleArretrato} pezzi ordinati nelle settimane passate non
+              risultano in nessuna fattura: è l&apos;arretrato da contestare al
+              fornitore.
             </p>
           )}
         </header>
@@ -177,7 +179,10 @@ export default function AdminRicezioni() {
                         {stato.localeNome}
                       </h2>
                       <p className="text-sm font-bold text-slate-500">
-                        {stato.righeAperte} righe da ricevere
+                        {stato.righeAperte} righe aperte
+                        {stato.daRegistrare > 0
+                          ? ` · ${stato.pezziDaRegistrare} pezzi già in fattura da registrare`
+                          : ""}
                         {stato.validataDa ? ` · ultima validazione ${stato.validataDa}` : ""}
                       </p>
                     </div>
@@ -185,9 +190,14 @@ export default function AdminRicezioni() {
 
                   <div className="flex items-center gap-3">
                     {stato.arretrato > 0 ? (
-                      <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-black uppercase text-amber-700">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-black uppercase text-red-700">
                         <Clock className="h-4 w-4" />
-                        arretrato: {stato.pezziArretrati} pezzi
+                        mai arrivati: {stato.pezziArretrati} pezzi
+                      </span>
+                    ) : stato.daRegistrare > 0 ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-black uppercase text-blue-700">
+                        <PackageCheck className="h-4 w-4" />
+                        consegnati, da registrare
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[11px] font-black uppercase text-green-700">
