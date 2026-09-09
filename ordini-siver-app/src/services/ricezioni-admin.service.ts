@@ -1,35 +1,36 @@
 import { supabase } from "@/lib/supabase"
+import { settimanaKeyCorrente } from "@/lib/settimana"
+import { caricaRicezione } from "./ricezione.service"
+import type { Ricezione } from "@/types/ricezione"
 
 /*
-  Vista amministrativa delle ricezioni: mostra a che punto è ogni locale e
-  permette di riaprire quelle chiuse.
+  Vista amministrativa delle ricezioni.
 
-  La chiusura è irreversibile per il locale, di proposito: serve a impedire
-  che i numeri cambino dopo essere stati dati per buoni. Se però un
-  responsabile chiude per sbaglio o con quantità errate, senza una via di
-  uscita l'errore resterebbe nei dati per sempre. Quella via passa
-  dall'amministrazione, che riapre e lascia correggere.
+  Serve a rispondere alla domanda che i locali non si pongono: cosa è stato
+  ordinato e non è mai arrivato. Le righe aperte delle settimane passate sono
+  l'arretrato vero; quelle della settimana corrente sono solo merce in viaggio,
+  e vanno tenute distinte per non far sembrare un problema ciò che è normale.
 */
 
 export type StatoRicezioneLocale = {
   localeId: string
   localeNome: string
-  righe: number
-  validate: number
-  chiusa: boolean
+  righeAperte: number
+  /** Righe di settimane precedenti ancora scoperte: l'arretrato. */
+  arretrato: number
+  pezziArretrati: number
   ultimaValidazione: string | null
   validataDa: string | null
 }
 
-export async function caricaStatoRicezioni(
-  settimanaKey: string,
-): Promise<StatoRicezioneLocale[]> {
+export async function caricaStatoRicezioni(): Promise<StatoRicezioneLocale[]> {
+  const settimanaCorrente = settimanaKeyCorrente()
+
   const { data, error } = await supabase
     .from("ordini")
     .select(
-      "locale_id, locale_nome, consegna_validata_da, consegna_validata_il",
+      "locale_id, locale_nome, quantita, quantita_consegnata, settimana_key, consegna_validata_da, consegna_validata_il",
     )
-    .eq("settimana_key", settimanaKey)
 
   if (error) throw new Error(error.message)
 
@@ -44,17 +45,26 @@ export async function caricaStatoRicezioni(
       ({
         localeId: id,
         localeNome: String(riga.locale_nome || "Locale"),
-        righe: 0,
-        validate: 0,
-        chiusa: false,
+        righeAperte: 0,
+        arretrato: 0,
+        pezziArretrati: 0,
         ultimaValidazione: null,
         validataDa: null,
       } as StatoRicezioneLocale)
 
-    stato.righe += 1
+    const residuo =
+      Number(riga.quantita || 0) - Number(riga.quantita_consegnata || 0)
+
+    if (residuo > 0) {
+      stato.righeAperte += 1
+
+      if (String(riga.settimana_key || "") < settimanaCorrente) {
+        stato.arretrato += 1
+        stato.pezziArretrati += residuo
+      }
+    }
 
     if (riga.consegna_validata_il) {
-      stato.validate += 1
       stato.validataDa = riga.consegna_validata_da || stato.validataDa
 
       if (
@@ -68,12 +78,19 @@ export async function caricaStatoRicezioni(
     perLocale.set(id, stato)
   }
 
-  return Array.from(perLocale.values())
-    .map((stato) => ({
-      ...stato,
-      chiusa: stato.righe > 0 && stato.validate === stato.righe,
-    }))
-    .sort((a, b) => a.localeNome.localeCompare(b.localeNome))
+  return Array.from(perLocale.values()).sort(
+    (a, b) => b.pezziArretrati - a.pezziArretrati || a.localeNome.localeCompare(b.localeNome),
+  )
+}
+
+/**
+ * Dettaglio di un locale: le stesse righe che vede il responsabile nella sua
+ * schermata di ricezione, comprese le consegne proposte dalle fatture.
+ */
+export async function caricaDettaglioLocale(
+  localeId: string,
+): Promise<Ricezione> {
+  return caricaRicezione(localeId)
 }
 
 /**

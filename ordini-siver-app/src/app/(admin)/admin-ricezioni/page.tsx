@@ -1,40 +1,69 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle2, Clock, RefreshCw, Unlock } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  PackageCheck,
+  RefreshCw,
+  Unlock,
+} from "lucide-react"
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import { settimanaKeyCorrente } from "@/lib/settimana"
 import {
+  caricaDettaglioLocale,
   caricaStatoRicezioni,
   riapriRicezione,
   type StatoRicezioneLocale,
 } from "@/services/ricezioni-admin.service"
+import type { Ricezione } from "@/types/ricezione"
 
 export default function AdminRicezioni() {
-  const [settimanaKey, setSettimanaKey] = useState(settimanaKeyCorrente())
   const [stati, setStati] = useState<StatoRicezioneLocale[]>([])
+  const [aperto, setAperto] = useState<string | null>(null)
+  const [dettaglio, setDettaglio] = useState<Ricezione | null>(null)
+  const [caricandoDettaglio, setCaricandoDettaglio] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errore, setErrore] = useState("")
   const [messaggio, setMessaggio] = useState("")
-  const [daRiaprire, setDaRiaprire] = useState<StatoRicezioneLocale | null>(
-    null,
-  )
+  const [daRiaprire, setDaRiaprire] = useState<StatoRicezioneLocale | null>(null)
 
   useEffect(() => {
     void carica()
-  }, [settimanaKey])
+  }, [])
 
   async function carica() {
     setLoading(true)
     setErrore("")
 
     try {
-      setStati(await caricaStatoRicezioni(settimanaKey))
+      setStati(await caricaStatoRicezioni())
     } catch (error) {
       setErrore(error instanceof Error ? error.message : "Errore imprevisto")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function apri(stato: StatoRicezioneLocale) {
+    if (aperto === stato.localeId) {
+      setAperto(null)
+      setDettaglio(null)
+      return
+    }
+
+    setAperto(stato.localeId)
+    setDettaglio(null)
+    setCaricandoDettaglio(true)
+
+    try {
+      setDettaglio(await caricaDettaglioLocale(stato.localeId))
+    } catch (error) {
+      setErrore(error instanceof Error ? error.message : "Errore imprevisto")
+    } finally {
+      setCaricandoDettaglio(false)
     }
   }
 
@@ -49,7 +78,7 @@ export default function AdminRicezioni() {
       await riapriRicezione({
         localeId: daRiaprire.localeId,
         localeNome: daRiaprire.localeNome,
-        settimanaKey,
+        settimanaKey: settimanaKeyCorrente(),
       })
 
       setMessaggio(
@@ -65,6 +94,8 @@ export default function AdminRicezioni() {
     }
   }
 
+  const totaleArretrato = stati.reduce((somma, s) => somma + s.pezziArretrati, 0)
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-4">
@@ -75,37 +106,31 @@ export default function AdminRicezioni() {
                 Ricezione merce
               </p>
               <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-                Stato validazioni per locale
+                Cosa non è ancora arrivato
               </h1>
               <p className="mt-1 text-sm font-bold text-slate-500">
-                Chi ha già confermato cosa è arrivato, e chi deve ancora farlo.
+                Apri un locale per vedere le righe scoperte. L&apos;arretrato
+                sono gli ordini di settimane passate mai consegnati.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="text-xs font-black uppercase text-slate-500">
-                Settimana
-                <input
-                  type="date"
-                  value={settimanaKey}
-                  onChange={(e) => setSettimanaKey(e.target.value)}
-                  className="mt-1 block h-12 rounded-2xl border-2 border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-blue-600"
-                />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => void carica()}
-                disabled={loading}
-                className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:bg-slate-400"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                />
-                Aggiorna
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void carica()}
+              disabled={loading}
+              className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:bg-slate-400"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Aggiorna
+            </button>
           </div>
+
+          {totaleArretrato > 0 && (
+            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-900">
+              Arretrato complessivo: {totaleArretrato} pezzi ordinati nelle
+              settimane precedenti e non ancora consegnati.
+            </p>
+          )}
         </header>
 
         {messaggio && (
@@ -127,55 +152,143 @@ export default function AdminRicezioni() {
             </div>
           ) : stati.length === 0 ? (
             <div className="p-10 text-center text-sm font-bold text-slate-500">
-              Nessun ordine registrato per questa settimana.
+              Nessun ordine registrato.
             </div>
           ) : (
             stati.map((stato, indice) => (
               <div
                 key={stato.localeId}
-                className={`flex flex-col gap-3 border-b border-slate-100 p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between ${
-                  indice % 2 === 0 ? "bg-white" : "bg-slate-50"
-                }`}
+                className={indice % 2 === 0 ? "bg-white" : "bg-slate-50"}
               >
-                <div className="min-w-0">
-                  <h2 className="text-base font-black text-slate-950">
-                    {stato.localeNome}
-                  </h2>
-                  <p className="text-sm font-bold text-slate-500">
-                    {stato.validate} di {stato.righe} righe validate
-                    {stato.validataDa ? ` · ${stato.validataDa}` : ""}
-                    {stato.ultimaValidazione
-                      ? ` · ${new Date(stato.ultimaValidazione).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-                      : ""}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-black uppercase ${
-                      stato.chiusa
-                        ? "border-green-200 bg-green-50 text-green-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {stato.chiusa ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Clock className="h-4 w-4" />
-                    )}
-                    {stato.chiusa ? "Chiusa" : "In corso"}
-                  </span>
-
+                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
-                    onClick={() => setDaRiaprire(stato)}
-                    disabled={!stato.chiusa || saving}
-                    className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+                    onClick={() => void apri(stato)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
-                    <Unlock className="h-4 w-4" />
-                    Riapri
+                    {aperto === stato.localeId ? (
+                      <ChevronDown className="h-5 w-5 shrink-0 text-slate-400" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                    )}
+
+                    <div className="min-w-0">
+                      <h2 className="text-base font-black text-slate-950">
+                        {stato.localeNome}
+                      </h2>
+                      <p className="text-sm font-bold text-slate-500">
+                        {stato.righeAperte} righe da ricevere
+                        {stato.validataDa ? ` · ultima validazione ${stato.validataDa}` : ""}
+                      </p>
+                    </div>
                   </button>
+
+                  <div className="flex items-center gap-3">
+                    {stato.arretrato > 0 ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-black uppercase text-amber-700">
+                        <Clock className="h-4 w-4" />
+                        arretrato: {stato.pezziArretrati} pezzi
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[11px] font-black uppercase text-green-700">
+                        <PackageCheck className="h-4 w-4" />
+                        nessun arretrato
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setDaRiaprire(stato)}
+                      disabled={saving || !stato.ultimaValidazione}
+                      className="inline-flex h-11 items-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+                    >
+                      <Unlock className="h-4 w-4" />
+                      Riapri
+                    </button>
+                  </div>
                 </div>
+
+                {aperto === stato.localeId && (
+                  <div className="border-b border-slate-200 bg-slate-100 px-4 py-4">
+                    {caricandoDettaglio ? (
+                      <p className="text-sm font-bold text-slate-500">
+                        Caricamento dettaglio...
+                      </p>
+                    ) : !dettaglio || dettaglio.righe.length === 0 ? (
+                      <p className="text-sm font-bold text-slate-500">
+                        Nessuna riga aperta per questo locale.
+                      </p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[720px] text-left text-sm">
+                          <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                            <tr>
+                              <th className="pb-2 pr-3">Prodotto</th>
+                              <th className="pb-2 pr-3">Settimana</th>
+                              <th className="pb-2 pr-3 text-center">Ordinati</th>
+                              <th className="pb-2 pr-3 text-center">Ricevuti</th>
+                              <th className="pb-2 pr-3 text-center">Mancano</th>
+                              <th className="pb-2 text-center">In attesa</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dettaglio.righe.map((riga) => (
+                              <tr
+                                key={riga.ordineId}
+                                className="border-t border-slate-200"
+                              >
+                                <td className="py-2 pr-3">
+                                  <p className="text-[11px] font-black text-slate-500">
+                                    {riga.supplierCode || "senza codice"}
+                                  </p>
+                                  <p className="font-black text-slate-950">
+                                    {riga.nomeProdotto}
+                                  </p>
+                                </td>
+                                <td className="py-2 pr-3 font-bold text-slate-600">
+                                  {riga.settimanaOrdine}
+                                </td>
+                                <td className="py-2 pr-3 text-center font-black text-slate-700">
+                                  {riga.quantitaOrdinata}
+                                </td>
+                                <td className="py-2 pr-3 text-center font-bold text-slate-600">
+                                  {riga.giaRicevuta}
+                                </td>
+                                <td className="py-2 pr-3 text-center font-black text-slate-950">
+                                  {riga.residuo}
+                                  {riga.propostaDaDocumenti > 0 && (
+                                    <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                                      {riga.propostaDaDocumenti} in fattura
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-center">
+                                  {riga.settimaneDiAttesa >= 1 ? (
+                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">
+                                      {riga.settimaneDiAttesa} sett.
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-bold text-slate-400">
+                                      in corso
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {dettaglio.senzaOrdine.length > 0 && (
+                          <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                            {dettaglio.senzaOrdine.length} righe nei documenti
+                            senza ordine corrispondente: merce arrivata e mai
+                            ordinata, oppure ordini non registrati.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -185,7 +298,7 @@ export default function AdminRicezioni() {
       <ConfirmDialog
         open={!!daRiaprire}
         title="Riaprire la ricezione?"
-        description={`${daRiaprire?.localeNome || "Il locale"} potrà di nuovo modificare le quantità ricevute della settimana ${settimanaKey}. I numeri già inseriti restano, viene tolta solo la chiusura, e il locale riceve una notifica.`}
+        description={`${daRiaprire?.localeNome || "Il locale"} potrà di nuovo modificare le quantità ricevute della settimana corrente. I numeri già inseriti restano, viene tolta solo la chiusura, e il locale riceve una notifica.`}
         confirmText="Riapri"
         cancelText="Annulla"
         loading={saving}
