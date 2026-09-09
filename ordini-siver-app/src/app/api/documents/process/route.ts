@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import pdfParse from "pdf-parse/lib/pdf-parse"
 import { leggiDocumento } from "@/lib/document-center/documentParser"
+import { leggiFatturaElettronica } from "@/lib/document-center/fatturaElettronica"
 
 export const runtime = "nodejs"
 
@@ -48,19 +49,32 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await fileData.arrayBuffer())
-    const parsed = await pdfParse(buffer)
-    const text = normalizeText(parsed.text)
+
+    /*
+      Gli XML della fattura elettronica sono la fonte migliore: i campi sono
+      espliciti e il tipo di documento è dichiarato, quindi una nota di
+      credito non può essere scambiata per una consegna. I PDF restano per i
+      documenti che arrivano via mail, fra cui gli inevasi, che in XML non
+      esistono.
+    */
+    const isXml = /\.xml$/i.test(document.file_name || "")
+
+    const lettura = isXml
+      ? daFatturaElettronica(buffer.toString("utf-8"))
+      : await daPdf(buffer)
 
     const {
       tipo: tipoDocumento,
       righe: rows,
       numero: numeroLetto,
       totale: totaleLetto,
-    } = await leggiDocumento(buffer)
+      azienda: aziendaLetta,
+      data: dataLetta,
+    } = lettura
 
-    const companyName = findCompanyName(text)
-    const documentDate = findDocumentDate(text)
-    const documentNumber = numeroLetto ?? findDocumentNumber(text)
+    const companyName = aziendaLetta ?? findCompanyName(lettura.testo)
+    const documentDate = dataLetta ?? findDocumentDate(lettura.testo)
+    const documentNumber = numeroLetto ?? findDocumentNumber(lettura.testo)
 
     // Il totale letto accanto alla sua etichetta è affidabile; il vecchio
     // riconoscimento sul testo produceva importi inesistenti (51.457 € su un
@@ -259,3 +273,45 @@ function parseItalianNumber(value: string) {
   return Number.isFinite(number) ? number : 0
 }
 
+async function daPdf(buffer: Buffer) {
+  const parsed = await pdfParse(buffer)
+  const testo = normalizeText(parsed.text)
+  const letto = await leggiDocumento(buffer)
+
+  return {
+    tipo: letto.tipo as string,
+    righe: letto.righe,
+    numero: letto.numero,
+    totale: letto.totale,
+    azienda: null as string | null,
+    data: null as string | null,
+    testo,
+  }
+}
+
+function daFatturaElettronica(contenuto: string) {
+  const fattura = leggiFatturaElettronica(contenuto)
+
+  if (!fattura) {
+    return {
+      tipo: "sconosciuto",
+      righe: [],
+      numero: null,
+      totale: 0,
+      azienda: null as string | null,
+      data: null as string | null,
+      testo: contenuto,
+    }
+  }
+
+  return {
+    tipo: fattura.tipo === "nota_credito" ? "nota_credito" : "fattura",
+    righe: fattura.righe,
+    numero: fattura.numero,
+    totale: fattura.totale,
+    // Nell'XML il cliente è dichiarato: non serve cercarlo nel testo.
+    azienda: fattura.cliente,
+    data: fattura.data,
+    testo: contenuto,
+  }
+}

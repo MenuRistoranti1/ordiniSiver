@@ -44,22 +44,36 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
     documenti.map((d) => [String(d.id), String(d.file_name || "Documento")]),
   )
 
-  // Solo le fatture dicono cosa è arrivato: l'inevaso elenca ciò che manca,
-  // e sommarlo alle consegne significherebbe contare la merce non arrivata.
-  const daFatture = righeDocumento.filter(
-    (riga) => tipoPerDocumento.get(String(riga.document_id)) === "fattura",
-  )
+  /*
+    Solo le fatture dicono cosa è arrivato: l'inevaso elenca ciò che manca, e
+    sommarlo alle consegne significherebbe contare merce mai arrivata.
 
+    Le note di credito vanno invece sottratte: stornano una fattura, quindi
+    quella merce è stata resa o annullata. Trattarle come consegne farebbe
+    risultare evaso un ordine che non lo è.
+  */
   const disponibili = new Map<string, { quantita: number; ids: string[] }>()
 
-  for (const riga of daFatture) {
+  for (const riga of righeDocumento) {
+    const tipo = tipoPerDocumento.get(String(riga.document_id))
+    if (tipo !== "fattura" && tipo !== "nota_credito") continue
+
     const codice = normalizzaCodice(riga.supplier_code)
     if (!codice) continue
 
+    const segno = tipo === "nota_credito" ? -1 : 1
     const voce = disponibili.get(codice) || { quantita: 0, ids: [] }
-    voce.quantita += Number(riga.quantity || 0)
-    voce.ids.push(String(riga.id))
+
+    voce.quantita += segno * Number(riga.quantity || 0)
+    if (segno > 0) voce.ids.push(String(riga.id))
+
     disponibili.set(codice, voce)
+  }
+
+  // Uno storno può superare le consegne registrate: la disponibilità non
+  // scende sotto zero, semmai resta merce da ricevere.
+  for (const voce of disponibili.values()) {
+    if (voce.quantita < 0) voce.quantita = 0
   }
 
   const oggi = Date.now()
