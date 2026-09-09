@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import { settimanaKeyCorrente } from "@/lib/settimana"
 import type {
   DocumentoRicezione,
   Ricezione,
@@ -299,4 +298,3 @@ function normalizzaCodice(valore: unknown) {
     .trim()
 }
 
-export { settimanaKeyCorrente }

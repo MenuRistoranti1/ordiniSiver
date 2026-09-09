@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { settimanaKeyCorrente } from "@/lib/settimana"
 import { caricaMessaggiNonLetti } from "./dashboard/messaggi.service"
 import type {
   DashboardStats,
@@ -79,7 +80,7 @@ export async function caricaDashboardStats(
 async function caricaGiacenzeInfo(
   id: string,
 ): Promise<GiacenzeInfo> {
-  const settimanaKey = getSettimanaKey()
+  const settimanaKey = settimanaKeyCorrente()
 
   const [{ data: prodottiAttivi }, { data: giacenzeSettimana }] =
     await Promise.all([
@@ -256,20 +257,4 @@ async function caricaStatisticheLocale(id: string) {
       0,
     ),
   }
-}
-
-function sabatoCorrente() {
-  const oggi = new Date()
-  const giorno = oggi.getDay()
-  const diff = giorno >= 6 ? giorno - 6 : giorno + 1
-  const sabato = new Date(oggi)
-
-  sabato.setDate(oggi.getDate() - diff)
-  sabato.setHours(0, 0, 0, 0)
-
-  return sabato
-}
-
-function getSettimanaKey() {
-  return sabatoCorrente().toISOString().split("T")[0]
 }

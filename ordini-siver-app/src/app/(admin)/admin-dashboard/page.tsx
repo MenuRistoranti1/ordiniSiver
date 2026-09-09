@@ -19,7 +19,8 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase"
+import { settimanaKeyCorrente } from "@/lib/settimana";
 
 type StatoLocale = "ok" | "incompleto" | "mancante";
 
@@ -93,18 +94,9 @@ export default function AdminDashboard() {
     await Promise.all([caricaDashboard(), caricaNotifiche()]);
   }
 
-  function sabatoCorrente() {
-    const oggi = new Date();
-    const giorno = oggi.getDay();
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1;
-    const sabato = new Date(oggi);
-    sabato.setDate(oggi.getDate() - diff);
-    sabato.setHours(0, 0, 0, 0);
-    return sabato;
-  }
 
   function settimanaKey() {
-    return sabatoCorrente().toISOString().split("T")[0];
+    return settimanaKeyCorrente();
   }
 
   function salutoOrario() {

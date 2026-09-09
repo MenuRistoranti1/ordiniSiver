@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { settimanaKeyCorrente } from "@/lib/settimana"
 
 type AlertItem = {
   id: string
@@ -107,17 +108,6 @@ export default function AdminAlert() {
     caricaDati()
   }, [])
 
-  function getSettimanaKey() {
-    const oggi = new Date()
-    const giorno = oggi.getDay()
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1
-    const sabato = new Date(oggi)
-
-    sabato.setDate(oggi.getDate() - diff)
-    sabato.setHours(0, 0, 0, 0)
-
-    return sabato.toISOString().split("T")[0]
-  }
 
   function normalizza(testo: string) {
     return String(testo || "")
@@ -145,7 +135,7 @@ export default function AdminAlert() {
     setLoading(true)
     setErrore("")
 
-    const settimanaKey = getSettimanaKey()
+    const settimanaKey = settimanaKeyCorrente()
 
     try {
       const [
@@ -235,7 +225,7 @@ export default function AdminAlert() {
   }, [ordiniStorici])
 
   const alertCorrenti = useMemo(() => {
-    const settimanaKey = getSettimanaKey()
+    const settimanaKey = settimanaKeyCorrente()
     const lista: AlertItem[] = []
 
     locali.forEach((locale) => {

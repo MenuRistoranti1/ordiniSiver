@@ -1,6 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import {
+  periodoSettimana,
+  prossimaSettimana,
+  settimanaKeyCorrente,
+} from "@/lib/settimana"
 import type { User } from "@supabase/supabase-js"
 import { useToast } from "@/components/Toast"
 import { supabase } from "@/lib/supabase"
@@ -80,7 +85,7 @@ export function useLocaleInventory() {
         salvaBozzaGiacenze({
           locale_id: localeId,
           locale_nome: localeNome,
-          settimana_key: getSettimanaKey(),
+          settimana_key: settimanaKeyCorrente(),
           quantita,
           salvataAlle,
         })
@@ -175,7 +180,7 @@ export function useLocaleInventory() {
   }
 
   function ripristinaBozza(id: string) {
-    const bozza = caricaBozzaGiacenze(id, getSettimanaKey())
+    const bozza = caricaBozzaGiacenze(id, settimanaKeyCorrente())
 
     if (!bozza) return
 
@@ -190,17 +195,17 @@ export function useLocaleInventory() {
 
   async function controllaBlocco(id: string) {
     try {
-      const giaInviate = await verificaBloccoGiacenze(id, getSettimanaKey())
+      const giaInviate = await verificaBloccoGiacenze(id, settimanaKeyCorrente())
 
       if (!giaInviate) {
         setBlocco("")
         return
       }
 
-      const prossimo = prossimoSabato().toLocaleDateString("it-IT")
+      const prossimo = prossimaSettimana().toLocaleDateString("it-IT", { timeZone: "UTC" })
 
       setBlocco(
-        `Hai già inviato le giacenze di questa settimana. Potrai inserirle nuovamente da sabato ${prossimo}.`,
+        `Hai già inviato le giacenze di questa settimana. Potrai inserirle nuovamente da lunedì ${prossimo}.`,
       )
     } catch (errore) {
       console.log(errore)
@@ -376,7 +381,7 @@ export function useLocaleInventory() {
       salvaBozzaGiacenze({
         locale_id: localeId,
         locale_nome: localeNome,
-        settimana_key: getSettimanaKey(),
+        settimana_key: settimanaKeyCorrente(),
         quantita,
         salvataAlle,
       })
@@ -429,12 +434,12 @@ export function useLocaleInventory() {
         localeId,
         localeNome,
         operatore,
-        settimanaKey: getSettimanaKey(),
+        settimanaKey: settimanaKeyCorrente(),
         prodotti,
         quantita,
       })
 
-      rimuoviBozzaGiacenze(localeId, getSettimanaKey())
+      rimuoviBozzaGiacenze(localeId, settimanaKeyCorrente())
       showToast("Giacenze inviate!", "success")
 
       setTimeout(() => {
@@ -535,39 +540,6 @@ function salutoOrario() {
   return "Buonasera"
 }
 
-function sabatoCorrente() {
-  const oggi = new Date()
-  const giorno = oggi.getDay()
-  const diff = giorno >= 6 ? giorno - 6 : giorno + 1
-  const sabato = new Date(oggi)
 
-  sabato.setDate(oggi.getDate() - diff)
-  sabato.setHours(0, 0, 0, 0)
 
-  return sabato
-}
 
-function prossimoSabato() {
-  const sabato = sabatoCorrente()
-  sabato.setDate(sabato.getDate() + 7)
-  return sabato
-}
-
-function getSettimanaKey() {
-  return sabatoCorrente().toISOString().split("T")[0]
-}
-
-function periodoSettimana() {
-  const inizio = sabatoCorrente()
-  const fine = new Date(inizio)
-  fine.setDate(inizio.getDate() + 6)
-
-  return `${inizio.toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "short",
-  })} – ${fine.toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  })}`
-}

@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { prossimaSettimana, settimanaKeyCorrente } from "@/lib/settimana"
 import { useToast } from "@/components/Toast"
 import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
@@ -158,31 +159,12 @@ export default function NuovoOrdine() {
     return "Buonasera"
   }
 
-  function sabatoCorrente() {
-    const oggi = new Date()
-    const giorno = oggi.getDay()
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1
-    const sabato = new Date(oggi)
 
-    sabato.setDate(oggi.getDate() - diff)
-    sabato.setHours(0, 0, 0, 0)
 
-    return sabato
-  }
-
-  function prossimoSabato() {
-    const sabato = sabatoCorrente()
-    sabato.setDate(sabato.getDate() + 7)
-    return sabato
-  }
-
-  function getSettimanaKey() {
-    return sabatoCorrente().toISOString().split("T")[0]
-  }
 
   async function controllaBloccoOrdine(id: string) {
-    const settimanaKey = getSettimanaKey()
-    const prossimo = prossimoSabato().toLocaleDateString("it-IT")
+    const settimanaKey = settimanaKeyCorrente()
+    const prossimo = prossimaSettimana().toLocaleDateString("it-IT", { timeZone: "UTC" })
 
     const { data: giacenze } = await supabase
       .from("giacenze_settimana")
@@ -205,7 +187,7 @@ export default function NuovoOrdine() {
 
     if (Array.isArray(ordini) && ordini.length > 0) {
       setBlocco(
-        `Hai già inviato l'ordine di questa settimana. Potrai effettuare un nuovo ordine da sabato ${prossimo}.`
+        `Hai già inviato l'ordine di questa settimana. Potrai effettuare un nuovo ordine da lunedì ${prossimo}.`
       )
     }
   }
@@ -582,7 +564,7 @@ export default function NuovoOrdine() {
       return
     }
 
-    const settimanaKey = getSettimanaKey()
+    const settimanaKey = settimanaKeyCorrente()
 
     const righeProdotti = prodotti
       .filter((p) => quantita[p.id] && Number(quantita[p.id]) > 0)

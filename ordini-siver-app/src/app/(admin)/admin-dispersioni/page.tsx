@@ -13,7 +13,8 @@ import {
   TrendingDown,
   Warehouse,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase"
+import { lunediDellaSettimana } from "@/lib/settimana";
 
 type RigaAnalisi = {
   locale_id: string;
@@ -64,25 +65,15 @@ export default function AdminDispersioniPage() {
     await caricaDati();
   }
 
-  function sabatoCorrente() {
-    const oggi = new Date();
-    const giorno = oggi.getDay();
-    const diff = giorno >= 6 ? giorno - 6 : giorno + 1;
-    const sabato = new Date(oggi);
-    sabato.setDate(oggi.getDate() - diff);
-    sabato.setHours(0, 0, 0, 0);
-    return sabato;
-  }
-
-  function sabatoPrecedente() {
-    const data = sabatoCorrente();
-    data.setDate(data.getDate() - 7);
+  function settimanaPrecedente() {
+    const data = lunediDellaSettimana();
+    data.setUTCDate(data.getUTCDate() - 7);
     return data;
   }
 
-  function sabatoSuccessivo() {
-    const data = sabatoCorrente();
-    data.setDate(data.getDate() + 7);
+  function settimanaSuccessiva() {
+    const data = lunediDellaSettimana();
+    data.setUTCDate(data.getUTCDate() + 7);
     return data;
   }
 
@@ -94,9 +85,9 @@ export default function AdminDispersioniPage() {
     return data.toISOString().split("T")[0];
   }
 
-  const inizioSettimanaPrecedente = sabatoPrecedente();
-  const inizioSettimanaCorrente = sabatoCorrente();
-  const fineSettimanaCorrente = sabatoSuccessivo();
+  const inizioSettimanaPrecedente = settimanaPrecedente();
+  const inizioSettimanaCorrente = lunediDellaSettimana();
+  const fineSettimanaCorrente = settimanaSuccessiva();
   const settimanaCorrenteKey = key(inizioSettimanaCorrente);
   const settimanaPrecedenteKey = key(inizioSettimanaPrecedente);
 

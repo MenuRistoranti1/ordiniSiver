@@ -1,20 +1,14 @@
 /*
-  Calcolo della settimana operativa, ancorato all'ora italiana.
+  Settimana operativa, secondo il calendario ISO: da lunedì a domenica.
 
-  Il ciclo va da sabato a venerdì e ogni riga di giacenze/ordini porta una
-  "settimana_key". Nel browser dei locali la chiave viene calcolata con l'ora
-  locale: si trova il sabato, si azzera l'orario e si converte in stringa ISO.
-  Roma è sempre avanti rispetto a UTC, quindi quella conversione arretra di un
-  giorno e la chiave salvata cade di venerdì. È così per tutti i dati esistenti
-  (2026-09-04, 2026-07-10: entrambi venerdì).
+  La chiave (`settimana_key`) è la data del lunedì di apertura, in formato
+  AAAA-MM-GG. È la stessa convenzione dei fogli usati in amministrazione, dove
+  ogni colonna porta il lunedì della sua settimana.
 
-  Lo stesso codice eseguito sul server, che gira in UTC, produrrebbe invece il
-  sabato: chi legge da lì non troverebbe mai le righe scritte dai locali. Queste
-  funzioni riproducono di proposito la chiave del browser, così che il server
-  interroghi esattamente i dati reali.
-
-  Se un domani si vorrà spostare la chiave sul sabato "giusto", andrà fatto
-  insieme a una migrazione dei dati storici e al codice client, non qui.
+  Tutto è ancorato al fuso italiano e calcolato su componenti di data, non su
+  orari: il server gira in UTC e i browser in ora locale, e un calcolo basato
+  sull'orario produrrebbe chiavi diverse nei due ambienti — cosa che in
+  passato aveva già spostato le chiavi di un giorno indietro.
 */
 
 const FUSO_ITALIA = "Europe/Rome"
@@ -32,25 +26,62 @@ function dataItaliana(adesso: Date) {
   return { anno, mese, giorno }
 }
 
-/** Sabato di apertura della settimana in corso, secondo il calendario italiano. */
-export function sabatoCorrente(adesso = new Date()) {
+/** Lunedì di apertura della settimana che contiene la data indicata. */
+export function lunediDellaSettimana(adesso = new Date()) {
   const { anno, mese, giorno } = dataItaliana(adesso)
 
-  const oggi = new Date(Date.UTC(anno, mese - 1, giorno))
-  const giornoSettimana = oggi.getUTCDay()
-  const diff = giornoSettimana >= 6 ? giornoSettimana - 6 : giornoSettimana + 1
+  const data = new Date(Date.UTC(anno, mese - 1, giorno))
+  const giornoSettimana = data.getUTCDay()
 
-  return new Date(Date.UTC(anno, mese - 1, giorno - diff))
+  // getUTCDay(): domenica = 0. In ISO la domenica chiude la settimana, quindi
+  // torna indietro di sei giorni invece che restare sulla settimana dopo.
+  const scarto = giornoSettimana === 0 ? 6 : giornoSettimana - 1
+
+  return new Date(Date.UTC(anno, mese - 1, giorno - scarto))
 }
 
-/** Chiave della settimana in corso, nello stesso formato usato dai locali. */
+/** Chiave della settimana in corso: la data del lunedì. */
 export function settimanaKeyCorrente(adesso = new Date()) {
-  const sabato = sabatoCorrente(adesso)
+  return lunediDellaSettimana(adesso).toISOString().split("T")[0]
+}
 
-  // Allinea la chiave a quella prodotta dai browser italiani (vedi nota sopra).
-  sabato.setUTCDate(sabato.getUTCDate() - 1)
+/** Chiave della settimana che contiene una data qualsiasi. */
+export function settimanaKeyDiData(data: Date) {
+  const scarto = data.getUTCDay() === 0 ? 6 : data.getUTCDay() - 1
 
-  return sabato.toISOString().split("T")[0]
+  const lunedi = new Date(
+    Date.UTC(
+      data.getUTCFullYear(),
+      data.getUTCMonth(),
+      data.getUTCDate() - scarto,
+    ),
+  )
+
+  return lunedi.toISOString().split("T")[0]
+}
+
+/** Lunedì della settimana successiva: quando si potrà inserire di nuovo. */
+export function prossimaSettimana(adesso = new Date()) {
+  const lunedi = lunediDellaSettimana(adesso)
+  lunedi.setUTCDate(lunedi.getUTCDate() + 7)
+  return lunedi
+}
+
+/** Periodo leggibile della settimana in corso, es. "07 set – 13 set 2026". */
+export function periodoSettimana(adesso = new Date()) {
+  const inizio = lunediDellaSettimana(adesso)
+  const fine = new Date(inizio)
+  fine.setUTCDate(inizio.getUTCDate() + 6)
+
+  const formato = (data: Date, conAnno = false) =>
+    data.toLocaleDateString("it-IT", {
+      day: "2-digit",
+      month: "short",
+      year: conAnno ? "numeric" : undefined,
+      timeZone: "UTC",
+    })
+
+  return `${formato(inizio)} – ${formato(fine, true)}`
 }
 
 /** Ora del giorno (0-23) in Italia, indipendente dal fuso del server. */
