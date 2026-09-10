@@ -44,6 +44,8 @@ type ProdottoOrdine = {
   min_stock: number
   max_stock: number
   media_storica: number
+  /* Pezzi già ordinati nelle settimane scorse e non ancora consegnati. */
+  in_arrivo: number
   consigliato: number
 }
 
@@ -261,6 +263,34 @@ export default function NuovoOrdine() {
 
     if (errorStorico) console.log("Errore storico ordini:", errorStorico)
 
+    /*
+      Righe delle settimane precedenti ancora scoperte: è merce già ordinata e
+      non ancora arrivata. Senza questo dato il responsabile riordinerebbe
+      prodotti che stanno per essere consegnati, e il fornitore li manderebbe
+      due volte.
+    */
+    const { data: ordiniAperti } = await supabase
+      .from("ordini")
+      .select("supplier_code, quantita, quantita_consegnata, stato_consegna, settimana_key")
+      .eq("locale_id", id)
+      .neq("settimana_key", settimanaKeyCorrente())
+
+    const inArrivoPerCodice = new Map<string, number>()
+
+    for (const riga of ordiniAperti || []) {
+      if (riga.stato_consegna === "annullato") continue
+
+      const residuo =
+        Number(riga.quantita || 0) - Number(riga.quantita_consegnata || 0)
+
+      if (residuo <= 0) continue
+
+      const codice = String(riga.supplier_code || "").toUpperCase().trim()
+      if (!codice) continue
+
+      inArrivoPerCodice.set(codice, (inArrivoPerCodice.get(codice) || 0) + residuo)
+    }
+
     const prodottiFormattati = (impostazioni || [])
       .map((item: any) => {
         const idProdotto = item.prodotto_id || item.product_id
@@ -292,9 +322,18 @@ export default function NuovoOrdine() {
               ultime4.length
             : 0
 
+        const codiceProdotto = String(prodotto?.supplier_code || "").toUpperCase().trim()
+        const inArrivo = inArrivoPerCodice.get(codiceProdotto) || 0
+
         const consigliatoStorico = qtaGiacenza < mediaStorica ? Math.ceil(mediaStorica - qtaGiacenza) : 0
         const consigliatoSoglia = max > 0 && qtaGiacenza < min ? max - qtaGiacenza : 0
-        const consigliato = Math.max(consigliatoStorico, consigliatoSoglia)
+
+        // Ciò che sta già arrivando copre parte del fabbisogno: va scalato dal
+        // consiglio, altrimenti si ordina due volte la stessa merce.
+        const consigliato = Math.max(
+          0,
+          Math.max(consigliatoStorico, consigliatoSoglia) - inArrivo,
+        )
 
         return {
           id: String(idProdotto),
@@ -304,6 +343,7 @@ export default function NuovoOrdine() {
           min_stock: min,
           max_stock: max,
           media_storica: Math.ceil(mediaStorica),
+          in_arrivo: inArrivo,
           consigliato,
         }
       })
@@ -519,6 +559,13 @@ export default function NuovoOrdine() {
   const prodottiSottoSoglia = prodotti.filter((p) => statoSoglia(p) === "Sotto soglia").length
   const consigliatiDisponibili = prodotti.filter((p) => Number(p.consigliato || 0) > 0).length
 
+  // Merce già ordinata nelle settimane scorse e non ancora arrivata.
+  const prodottiInArrivo = prodotti.filter((p) => Number(p.in_arrivo || 0) > 0)
+  const pezziInArrivo = prodottiInArrivo.reduce(
+    (somma, p) => somma + Number(p.in_arrivo || 0),
+    0,
+  )
+
   async function salvaOrdine() {
     if (isSaving) return
 
@@ -700,6 +747,36 @@ export default function NuovoOrdine() {
             </div>
           </div>
         </header>
+
+        {prodottiInArrivo.length > 0 && (
+          <section className="rounded-3xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+              <div className="min-w-0">
+                <p className="text-sm font-black text-amber-900">
+                  {pezziInArrivo} pezzi sono già stati ordinati e non sono ancora
+                  arrivati
+                </p>
+                <p className="mt-1 text-xs font-bold text-amber-800">
+                  Riguardano {prodottiInArrivo.length} prodotti delle settimane
+                  precedenti. Le quantità consigliate ne tengono già conto:
+                  controlla prima di riordinarli, o arriveranno due volte.
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {prodottiInArrivo.map((p) => (
+                    <span
+                      key={p.id}
+                      className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-[11px] font-black text-amber-900"
+                    >
+                      {p.nome_prodotto}: {p.in_arrivo}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {blocco && (
           <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-800 shadow-sm">
@@ -886,6 +963,12 @@ export default function NuovoOrdine() {
                       <div className="min-w-0 px-4 py-4">
                         <p className="truncate text-sm font-black text-slate-950">{prodotto.nome_prodotto}</p>
                         <p className="mt-0.5 text-[11px] font-bold text-slate-500">Media storica: {prodotto.media_storica || 0}</p>
+
+                        {prodotto.in_arrivo > 0 && (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-800">
+                            già ordinati e non arrivati: {prodotto.in_arrivo}
+                          </span>
+                        )}
                       </div>
 
                       <div className="px-4 py-4 text-right">
@@ -966,6 +1049,11 @@ export default function NuovoOrdine() {
 
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             <span className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-700">Media {prodotto.media_storica || 0}</span>
+                            {prodotto.in_arrivo > 0 && (
+                              <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800">
+                                in arrivo {prodotto.in_arrivo}
+                              </span>
+                            )}
                             <span className="rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-black text-orange-700">Min/Max {prodotto.min_stock}/{prodotto.max_stock}</span>
                             <span className={`rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${classeStato(stato)}`}>{stato}</span>
                           </div>
