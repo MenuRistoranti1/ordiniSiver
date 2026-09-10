@@ -13,7 +13,11 @@
       "Bash(node /tmp/inventario.mjs)",
       "Bash(node /private/tmp/claude-501/-Users-simone-Documents-GitHub-ordiniSiver/5b1187b4-6570-4a7f-adca-0e21e6fd5ec7/scratchpad/azzera.mjs)",
       "Bash(ls -lt ~/Downloads/*.xlsx ~/Downloads/*.xls ~/Downloads/*.csv ~/Desktop/*.xlsx ~/Desktop/*.csv 2>/dev/null | head -10; echo \"--- file modificati oggi ---\"; find ~/Downloads ~/Desktop -maxdepth 1 -mtime -1 -type f 2>/dev/null | head -10)",
-      "Read(//Users/simone/Desktop/**)"
+      "Read(//Users/simone/Desktop/**)",
+      "Bash(node /private/tmp/claude-501/-Users-simone-Documents-GitHub-ordiniSiver/5b1187b4-6570-4a7f-adca-0e21e6fd5ec7/scratchpad/riallinea-nomi.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-simone-Documents-GitHub-ordiniSiver/5b1187b4-6570-4a7f-adca-0e21e6fd5ec7/scratchpad/riallinea-nomi.mjs --scrivi)",
+      "Bash(node /tmp/nomi2.mjs)",
+      "Bash(node /tmp/prezzi.mjs)"
     ]
   }
 }

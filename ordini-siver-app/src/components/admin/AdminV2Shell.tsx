@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   SlidersHorizontal,
   Tags,
+  TrendingUp,
   Truck,
   Users,
   Warehouse,
@@ -66,6 +67,7 @@ const menuGroups = [
   {
     title: "Economia",
     items: [
+      { href: "/admin-prezzi", label: "Andamento prezzi", icon: TrendingUp },
       { href: "/admin-import-prezzi", label: "Import prezzi", icon: FileText },
       {
         href: "/admin-storico-fatture",
