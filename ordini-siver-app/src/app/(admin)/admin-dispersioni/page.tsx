@@ -214,7 +214,17 @@ export default function AdminDispersioniPage() {
       const nome_prodotto = String(o.nome_prodotto || "");
       if (!locale_id || !nome_prodotto) return;
       const riga = getRiga({ locale_id, locale_nome, nome_prodotto, supplier_code: o.supplier_code || "" });
-      const consegnato = o.stato_consegna === "parziale" ? numero(o.quantita_consegnata) : o.stato_consegna === "consegnato" ? numero(o.quantita_consegnata || o.quantita) : 0;
+      /*
+        Conta cio' che e' davvero arrivato, qualunque sia lo stato della riga.
+        Una riga annullata puo' essere stata consegnata in parte, e quei pezzi
+        sono entrati in magazzino: escluderli farebbe sottostimare le rotture.
+        Per le righe chiuse come consegnate senza quantita' registrata si
+        assume che sia arrivato tutto l'ordinato.
+      */
+      const consegnato =
+        o.stato_consegna === "consegnato"
+          ? numero(o.quantita_consegnata || o.quantita)
+          : numero(o.quantita_consegnata);
       riga.consegnato += consegnato;
     });
 
