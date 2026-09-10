@@ -1,4 +1,13 @@
-export type StatoConsegna = "da_consegnare" | "parziale" | "consegnato"
+/*
+  "annullato" chiude una riga che non sarà mai evasa: ordine ritirato o
+  fornitura cancellata dal fornitore. Senza questo stato la riga resterebbe
+  aperta per sempre, gonfiando l'arretrato con merce che nessuno aspetta più.
+*/
+export type StatoConsegna =
+  | "da_consegnare"
+  | "parziale"
+  | "consegnato"
+  | "annullato"
 
 /**
  * Una riga d'ordine ancora aperta, cioè con merce che deve ancora arrivare.

@@ -12,6 +12,7 @@ import {
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import { settimanaKeyCorrente } from "@/lib/settimana"
 import {
+  annullaRigaOrdine,
   caricaDettaglioLocale,
   caricaStatoRicezioni,
   riapriRicezione,
@@ -29,6 +30,39 @@ export default function AdminRicezioni() {
   const [errore, setErrore] = useState("")
   const [messaggio, setMessaggio] = useState("")
   const [daRiaprire, setDaRiaprire] = useState<StatoRicezioneLocale | null>(null)
+  const [daAnnullare, setDaAnnullare] = useState<{
+    ordineId: string
+    prodotto: string
+    residuo: number
+  } | null>(null)
+
+  async function confermaAnnullamento() {
+    if (!daAnnullare || !aperto) return
+
+    setSaving(true)
+    setErrore("")
+
+    try {
+      await annullaRigaOrdine({
+        ordineId: daAnnullare.ordineId,
+        motivo: "Annullato dall'amministrazione",
+        operatore: "Amministrazione",
+      })
+
+      setMessaggio(
+        `${daAnnullare.prodotto}: ${daAnnullare.residuo} pezzi annullati, non compaiono più fra quelli da ricevere.`,
+      )
+
+      const localeAperto = aperto
+      setDaAnnullare(null)
+      setDettaglio(await caricaDettaglioLocale(localeAperto))
+      await carica()
+    } catch (error) {
+      setErrore(error instanceof Error ? error.message : "Errore imprevisto")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     void carica()
@@ -238,7 +272,8 @@ export default function AdminRicezioni() {
                               <th className="pb-2 pr-3 text-center">Ordinati</th>
                               <th className="pb-2 pr-3 text-center">Ricevuti</th>
                               <th className="pb-2 pr-3 text-center">Mancano</th>
-                              <th className="pb-2 text-center">In attesa</th>
+                              <th className="pb-2 pr-3 text-center">In attesa</th>
+                              <th className="pb-2 text-right">Azione</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -272,7 +307,7 @@ export default function AdminRicezioni() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-2 text-center">
+                                <td className="py-2 pr-3 text-center">
                                   {riga.settimaneDiAttesa >= 1 ? (
                                     <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">
                                       {riga.settimaneDiAttesa} sett.
@@ -282,6 +317,23 @@ export default function AdminRicezioni() {
                                       ordine di questa settimana
                                     </span>
                                   )}
+                                </td>
+
+                                <td className="py-2 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setDaAnnullare({
+                                        ordineId: riga.ordineId,
+                                        prodotto: riga.nomeProdotto,
+                                        residuo: riga.residuo,
+                                      })
+                                    }
+                                    disabled={saving}
+                                    className="rounded-xl border border-slate-300 px-3 py-1 text-[11px] font-black text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                                  >
+                                    Annulla
+                                  </button>
                                 </td>
                               </tr>
                             ))}
@@ -304,6 +356,17 @@ export default function AdminRicezioni() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={!!daAnnullare}
+        title="Annullare questa riga?"
+        description={`${daAnnullare?.prodotto || "La riga"}: ${daAnnullare?.residuo || 0} pezzi non ancora consegnati verranno considerati annullati. La riga esce dall'arretrato e non viene più proposta al locale. Quanto già ricevuto resta registrato.`}
+        confirmText="Annulla la riga"
+        cancelText="Lascia in attesa"
+        loading={saving}
+        onCancel={() => setDaAnnullare(null)}
+        onConfirm={confermaAnnullamento}
+      />
 
       <ConfirmDialog
         open={!!daRiaprire}

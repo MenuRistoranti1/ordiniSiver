@@ -43,7 +43,7 @@ export async function caricaStatoRicezioni(): Promise<StatoRicezioneLocale[]> {
   const [ordini, documenti] = await Promise.all([
     leggiTutto(
       "ordini",
-      "id,locale_id,locale_nome,supplier_code,quantita,quantita_consegnata,settimana_key,consegna_validata_da,consegna_validata_il",
+      "id,locale_id,locale_nome,supplier_code,quantita,quantita_consegnata,stato_consegna,settimana_key,consegna_validata_da,consegna_validata_il",
     ),
     leggiTutto("documents", "id,restaurant_id,document_type"),
   ])
@@ -111,7 +111,9 @@ export async function caricaStatoRicezioni(): Promise<StatoRicezioneLocale[]> {
     }
 
     const residuo =
-      Number(riga.quantita || 0) - Number(riga.quantita_consegnata || 0)
+      riga.stato_consegna === "annullato"
+        ? 0
+        : Number(riga.quantita || 0) - Number(riga.quantita_consegnata || 0)
 
     if (residuo > 0) {
       stato.righeAperte += 1
@@ -155,6 +157,29 @@ export async function caricaDettaglioLocale(
   localeId: string,
 ): Promise<Ricezione> {
   return caricaRicezione(localeId)
+}
+
+/**
+ * Chiude una riga d'ordine che non sarà mai evasa. La quantità già ricevuta
+ * resta registrata: si annulla solo ciò che manca, e il motivo viene salvato
+ * perché a distanza di mesi nessuno ricordi perché quella riga è sparita.
+ */
+export async function annullaRigaOrdine(input: {
+  ordineId: string
+  motivo: string
+  operatore: string
+}): Promise<void> {
+  const { error } = await supabase
+    .from("ordini")
+    .update({
+      stato_consegna: "annullato",
+      nota_consegna: input.motivo.trim() || "Annullato",
+      consegna_validata_da: input.operatore.trim() || "Amministrazione",
+      consegna_validata_il: new Date().toISOString(),
+    })
+    .eq("id", input.ordineId)
+
+  if (error) throw new Error(error.message)
 }
 
 /**

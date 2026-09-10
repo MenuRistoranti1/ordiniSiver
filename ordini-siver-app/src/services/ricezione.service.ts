@@ -262,7 +262,7 @@ async function caricaOrdiniAperti(localeId: string) {
   const { data, error } = await supabase
     .from("ordini")
     .select(
-      "id, nome_prodotto, supplier_code, quantita, quantita_consegnata, stato_consegna, settimana_key, consegna_validata_da, consegna_validata_il",
+      "id, nome_prodotto, supplier_code, quantita, quantita_consegnata, stato_consegna, settimana_key, consegna_validata_da, consegna_validata_il, nota_consegna",
     )
     .eq("locale_id", localeId)
     .order("settimana_key", { ascending: true })
@@ -271,6 +271,7 @@ async function caricaOrdiniAperti(localeId: string) {
 
   return (data || []).filter(
     (ordine) =>
+      ordine.stato_consegna !== "annullato" &&
       Number(ordine.quantita || 0) > Number(ordine.quantita_consegnata || 0),
   )
 }
