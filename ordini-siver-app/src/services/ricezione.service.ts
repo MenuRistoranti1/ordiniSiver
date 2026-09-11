@@ -104,6 +104,10 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
     }
 
     const settimana = String(ordine.settimana_key || "")
+
+    // Quantità che il fornitore dichiara esplicitamente inevasa per questa riga.
+    const inevasoDichiarato =
+      inevasiPerOrdine.get(`${codice}|${settimana}`) ?? null
     const attesa = settimana
       ? Math.max(
           0,
@@ -121,6 +125,7 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
       giaRicevuta,
       residuo,
       propostaDaDocumenti: proposta,
+      inevasoDichiarato,
       inArrivo: proposta,
       statoConsegna: (ordine.stato_consegna || "da_consegnare") as StatoConsegna,
       validataDa: ordine.consegna_validata_da || null,
@@ -130,6 +135,29 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
   })
 
   // Ciò che resta dopo l'imputazione non era stato ordinato da nessuno.
+  /*
+    Gli inevasi in formato tabellare indicano la data dell'ordine da cui nasce
+    l'arretrato. Dove c'è, dice quale settimana è scoperta senza doverlo
+    dedurre imputando dalla riga più vecchia: un inevaso che cita un ordine di
+    settembre non riguarda una riga di agosto.
+  */
+  const inevasiPerOrdine = new Map<string, number>()
+
+  for (const riga of righeDocumento) {
+    if (tipoPerDocumento.get(String(riga.document_id)) !== "inevaso") continue
+
+    const codice = normalizzaCodice(riga.supplier_code)
+    const data = riga.order_date ? String(riga.order_date) : ""
+
+    if (!codice || !data) continue
+
+    const chiave = `${codice}|${settimanaDiData(data)}`
+    inevasiPerOrdine.set(
+      chiave,
+      (inevasiPerOrdine.get(chiave) || 0) + Number(riga.quantity || 0),
+    )
+  }
+
   const senzaOrdine: RigaSenzaOrdine[] = []
 
   for (const riga of righeDocumento) {
@@ -297,7 +325,9 @@ async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
 
   const { data, error } = await supabase
     .from("document_rows")
-    .select("id, document_id, supplier_code, product_name, quantity")
+    .select(
+      "id, document_id, supplier_code, product_name, quantity, order_reference, order_date",
+    )
     .in("document_id", idsDocumenti)
     .is("matched_order_id", null)
 
@@ -313,3 +343,12 @@ function normalizzaCodice(valore: unknown) {
     .trim()
 }
 
+/** Lunedì della settimana che contiene la data indicata (ISO, come gli ordini). */
+function settimanaDiData(data: string) {
+  const d = new Date(`${data}T12:00:00Z`)
+  const giorno = d.getUTCDay()
+
+  d.setUTCDate(d.getUTCDate() - (giorno === 0 ? 6 : giorno - 1))
+
+  return d.toISOString().split("T")[0]
+}

@@ -306,6 +306,12 @@ export default function AdminRicezioni() {
                                       {riga.propostaDaDocumenti} in fattura
                                     </span>
                                   )}
+
+                                  {riga.inevasoDichiarato !== null && (
+                                    <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">
+                                      {riga.inevasoDichiarato} dichiarati inevasi
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2 pr-3 text-center">
                                   {riga.settimaneDiAttesa >= 1 ? (

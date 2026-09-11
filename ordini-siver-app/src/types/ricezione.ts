@@ -31,6 +31,12 @@ export type RigaRicezione = {
   residuo: number
   /** Quantità imputata a questa riga dai documenti non ancora conteggiati. */
   propostaDaDocumenti: number
+  /**
+   * Quantità che un inevaso attribuisce esplicitamente a questo ordine.
+   * Quando c'è, è la dichiarazione del fornitore su cosa deve ancora
+   * consegnare, e vale più di qualsiasi deduzione.
+   */
+  inevasoDichiarato: number | null
   /** Quantità che il responsabile dichiara arrivata in questa consegna. */
   inArrivo: number
   statoConsegna: StatoConsegna

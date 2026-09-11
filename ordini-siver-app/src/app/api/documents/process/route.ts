@@ -150,6 +150,10 @@ export async function POST(request: Request) {
             quantity: row.quantity,
             unit_price: row.unitPrice ?? 0,
             total_price: row.totalPrice ?? 0,
+            // Gli inevasi in formato tabellare dicono da quale ordine nasce
+            // ogni riga: conservarlo evita di doverlo dedurre.
+            order_reference: "numeroOrdine" in row ? row.numeroOrdine || null : null,
+            order_date: "dataOrdine" in row ? dataIso(row.dataOrdine) : null,
             matched_product_id: null,
             matched_product_name: null,
             match_status: "pending",
@@ -314,4 +318,12 @@ function daFatturaElettronica(contenuto: string) {
     data: fattura.data,
     testo: contenuto,
   }
+}
+
+/** Converte una data italiana (08/09/2026) nel formato del database. */
+function dataIso(valore?: string | null) {
+  if (!valore) return null
+
+  const m = valore.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null
 }
