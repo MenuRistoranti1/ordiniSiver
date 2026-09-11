@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { PackagePlus, RefreshCw, Search } from "lucide-react"
+import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import {
   caricaDaCodificare,
   codificaProdotto,
+  codificaTutti,
   type DaCodificare,
 } from "@/services/codifica.service"
 
@@ -15,6 +17,30 @@ export default function AdminCodifica() {
   const [errore, setErrore] = useState("")
   const [messaggio, setMessaggio] = useState("")
   const [ricerca, setRicerca] = useState("")
+  const [confermaTutti, setConfermaTutti] = useState(false)
+
+  async function aggiungiTutti() {
+    setSaving("tutti")
+    setMessaggio("")
+    setErrore("")
+
+    try {
+      const esito = await codificaTutti(filtrate)
+
+      setMessaggio(
+        `${esito.aggiunti} prodotti aggiunti in anagrafica.${esito.errori.length ? ` ${esito.errori.length} non riusciti.` : ""}`,
+      )
+
+      if (esito.errori.length) setErrore(esito.errori.slice(0, 3).join(" · "))
+
+      await carica()
+    } catch (error) {
+      setErrore(error instanceof Error ? error.message : "Errore imprevisto")
+    } finally {
+      setSaving(null)
+      setConfermaTutti(false)
+    }
+  }
 
   useEffect(() => {
     void carica()
@@ -88,15 +114,31 @@ export default function AdminCodifica() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void carica()}
-              disabled={loading}
-              className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:bg-slate-400"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Aggiorna
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void carica()}
+                disabled={loading}
+                className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:bg-slate-400"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Aggiorna
+              </button>
+
+              {righe.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConfermaTutti(true)}
+                  disabled={saving !== null || loading}
+                  className="inline-flex h-12 items-center gap-2 rounded-2xl bg-slate-950 px-5 text-sm font-black text-white hover:bg-slate-800 disabled:bg-slate-300"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  {saving === "tutti"
+                    ? "Aggiunta in corso..."
+                    : `Aggiungi tutti (${filtrate.length})`}
+                </button>
+              )}
+            </div>
           </div>
 
           {righe.length > 0 && (
@@ -198,6 +240,17 @@ export default function AdminCodifica() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={confermaTutti}
+        title="Aggiungere tutti in anagrafica?"
+        description={`Verranno creati ${filtrate.length} prodotti con nome e prezzo del fornitore, e le righe dei documenti già caricati saranno collegate. Restano senza categoria, unità e soglie: finché non le imposti non compariranno nelle giacenze dei locali.`}
+        confirmText="Aggiungi tutti"
+        cancelText="Annulla"
+        loading={saving === "tutti"}
+        onCancel={() => setConfermaTutti(false)}
+        onConfirm={aggiungiTutti}
+      />
     </div>
   )
 }

@@ -132,6 +132,34 @@ export async function codificaProdotto(input: {
   if (erroreRighe) throw new Error(erroreRighe.message)
 }
 
+/**
+ * Codifica in blocco: utile all'avvio, quando l'elenco raccoglie mesi di
+ * documenti. A regime i prodotti nuovi sono pochi per volta.
+ */
+export async function codificaTutti(
+  righe: DaCodificare[],
+): Promise<{ aggiunti: number; errori: string[] }> {
+  const errori: string[] = []
+  let aggiunti = 0
+
+  for (const riga of righe) {
+    try {
+      await codificaProdotto({
+        supplierCode: riga.supplierCode,
+        nomeProdotto: riga.nomeProdotto,
+        prezzo: riga.prezzo,
+      })
+      aggiunti++
+    } catch (errore) {
+      errori.push(
+        `${riga.supplierCode}: ${errore instanceof Error ? errore.message : "errore"}`,
+      )
+    }
+  }
+
+  return { aggiunti, errori }
+}
+
 async function leggiTutto(tabella: string, select: string) {
   const righe: Record<string, unknown>[] = []
 
