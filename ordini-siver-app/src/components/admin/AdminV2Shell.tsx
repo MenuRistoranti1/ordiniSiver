@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Package,
   PackageCheck,
+  PackagePlus,
   Ruler,
   ShoppingCart,
   SlidersHorizontal,
@@ -59,6 +60,7 @@ const menuGroups = [
     items: [
       { href: "/admin-locali", label: "Locali", icon: Building2 },
       { href: "/admin-prodotti", label: "Prodotti", icon: Package },
+      { href: "/admin-codifica", label: "Da codificare", icon: PackagePlus },
       { href: "/admin-categories", label: "Categorie", icon: Tags },
       { href: "/admin-units", label: "Unità", icon: Ruler },
       { href: "/admin-utenti", label: "Utenti", icon: Users },
