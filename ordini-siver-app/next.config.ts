@@ -15,10 +15,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-
-  // Deve coincidere con turbopack.root: altrimenti Next lo deduce dal
-  // package-lock.json nella radice del repo e i due valori divergono.
-  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;
