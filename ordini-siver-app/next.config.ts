@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -13,7 +14,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.1.141", "192.168.2.41"],
 
   turbopack: {
-    root: __dirname,
+    root: path.join(__dirname, ".."),
   },
 };
 
