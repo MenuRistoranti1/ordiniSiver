@@ -44,10 +44,16 @@ export function DocumentsDropzone({ onUploaded }: Props) {
         if (insertError) throw insertError
         if (!insertedDocument?.id) throw new Error("Documento non creato")
 
+        // L'elaborazione gira con i permessi pieni sul server: si presenta
+        // il token di chi ha caricato, così la rotta sa chi sta chiedendo.
+        const { data: sessione } = await supabase.auth.getSession()
+        const token = sessione.session?.access_token
+
         await fetch("/api/documents/process", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             documentId: insertedDocument.id,

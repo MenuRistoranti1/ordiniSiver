@@ -15,8 +15,26 @@ type ProcessRequest = {
   documentId: string
 }
 
+/*
+  Questa rotta legge i PDF, scrive le righe e assegna i documenti ai locali
+  usando la chiave di servizio, che ignora ogni permesso del database. Senza un
+  controllo qui, chiunque conoscesse l'indirizzo del sito potrebbe farla
+  lavorare: il controllo è lo stesso delle altre rotte di amministrazione.
+*/
+async function eAmministrazione(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "")
+  if (!token) return false
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token)
+  return !error && data.user?.app_metadata?.role === "admin"
+}
+
 export async function POST(request: Request) {
   try {
+    if (!(await eAmministrazione(request))) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
     const { documentId } = (await request.json()) as ProcessRequest
 
     if (!documentId) {
