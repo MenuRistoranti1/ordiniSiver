@@ -40,6 +40,11 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
   const tipoPerDocumento = new Map(
     documenti.map((d) => [String(d.id), String(d.document_type || "")]),
   )
+  const dataPerDocumento = new Map(
+    documenti
+      .filter((d) => d.document_date)
+      .map((d) => [String(d.id), String(d.document_date)]),
+  )
   const nomePerDocumento = new Map(
     documenti.map((d) => [String(d.id), String(d.file_name || "Documento")]),
   )
@@ -89,7 +94,16 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
     if (!inevasiValidi.has(String(riga.document_id))) continue
 
     const codice = normalizzaCodice(riga.supplier_code)
-    const data = riga.order_date ? String(riga.order_date) : ""
+
+    /*
+      Il riepilogo per cliente ha la data d'ordine su ogni riga; l'inevaso di
+      un singolo ordine ce l'ha solo in intestazione, ed è la stessa per tutte
+      le sue righe. Senza questo ripiego quegli inevasi non si collegavano a
+      nessuna settimana.
+    */
+    const data = riga.order_date
+      ? String(riga.order_date)
+      : dataPerDocumento.get(String(riga.document_id)) || ""
 
     if (!codice || !data) continue
 
@@ -349,35 +363,61 @@ async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
 }
 
 /*
-  Il riepilogo degli inevasi del fornitore elenca tutto ciò che è ancora
-  aperto per quel cliente, e si scarica di nuovo ogni settimana con lo stesso
-  nome ("ClientiInevasoOrdini010012.pdf", poi "... (7).pdf"). Sommare le
-  versioni raddoppierebbe gli inevasi: vale solo l'ultima caricata, perché
-  quelle precedenti descrivono una situazione già superata.
+  Quali inevasi valgono ancora.
+
+  Il fornitore manda due tipi di documento: l'inevaso di un singolo ordine
+  ("OrdineClienteInevaso_20236...") e il riepilogo di tutto ciò che è ancora
+  aperto per il cliente ("ClientiInevasoOrdini010012.pdf"), che si riscarica
+  ogni settimana con lo stesso nome ("... (7).pdf").
+
+  - Delle versioni dello stesso documento vale solo l'ultima caricata: le
+    precedenti descrivono una situazione superata, e sommarle raddoppiava gli
+    inevasi.
+  - Un riepilogo per cliente elenca già tutti gli ordini aperti: gli inevasi
+    dei singoli ordini caricati prima di lui sono superati, altrimenti le
+    stesse righe si conterebbero due volte.
 */
 function ultimeVersioniInevasi(
   documenti: { id: unknown; file_name?: unknown; document_type?: unknown; created_at?: unknown }[],
 ) {
-  const ultimaPerFonte = new Map<string, { id: string; caricato: string }>()
+  const inevasi = documenti
+    .filter((documento) => documento.document_type === "inevaso")
+    .map((documento) => ({
+      id: String(documento.id),
+      fonte: String(documento.file_name || "")
+        .toUpperCase()
+        .replace(/\.[A-Z0-9]+$/, "")
+        .replace(/\s*\(\d+\)$/, "")
+        .trim(),
+      caricato: String(documento.created_at || ""),
+    }))
 
-  for (const documento of documenti) {
-    if (documento.document_type !== "inevaso") continue
+  const ultimaPerFonte = new Map<string, (typeof inevasi)[number]>()
 
-    const fonte = String(documento.file_name || "")
-      .toUpperCase()
-      .replace(/\.[A-Z0-9]+$/, "")
-      .replace(/\s*\(\d+\)$/, "")
-      .trim()
-
-    const caricato = String(documento.created_at || "")
-    const attuale = ultimaPerFonte.get(fonte)
-
-    if (!attuale || caricato > attuale.caricato) {
-      ultimaPerFonte.set(fonte, { id: String(documento.id), caricato })
+  for (const documento of inevasi) {
+    const attuale = ultimaPerFonte.get(documento.fonte)
+    if (!attuale || documento.caricato > attuale.caricato) {
+      ultimaPerFonte.set(documento.fonte, documento)
     }
   }
 
-  return new Set(Array.from(ultimaPerFonte.values()).map((voce) => voce.id))
+  const ultime = Array.from(ultimaPerFonte.values())
+
+  const ultimoRiepilogo = ultime
+    .filter((documento) => documento.fonte.startsWith("CLIENTIINEVASOORDINI"))
+    .reduce((massimo, documento) =>
+      documento.caricato > massimo ? documento.caricato : massimo, "")
+
+  return new Set(
+    ultime
+      .filter(
+        (documento) =>
+          documento.fonte.startsWith("CLIENTIINEVASOORDINI") ||
+          !ultimoRiepilogo ||
+          documento.caricato > ultimoRiepilogo,
+      )
+      .map((documento) => documento.id),
+  )
 }
 
 function normalizzaCodice(valore: unknown) {
