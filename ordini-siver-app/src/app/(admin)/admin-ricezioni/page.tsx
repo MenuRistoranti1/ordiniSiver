@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock,
   PackageCheck,
+  PackageX,
   RefreshCw,
   Unlock,
 } from "lucide-react"
@@ -250,7 +251,14 @@ export default function AdminRicezioni() {
                     </div>
                   </button>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {stato.senzaOrdine > 0 && (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-black uppercase text-amber-800">
+                        <PackageX className="h-4 w-4" />
+                        {stato.senzaOrdine} arrivati senza ordine
+                      </span>
+                    )}
+
                     {stato.arretrato > 0 ? (
                       <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-black uppercase text-red-700">
                         <Clock className="h-4 w-4" />

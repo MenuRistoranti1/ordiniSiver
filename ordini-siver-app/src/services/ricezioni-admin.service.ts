@@ -32,6 +32,8 @@ export type StatoRicezioneLocale = {
   pezziArretrati: number
   ultimaValidazione: string | null
   validataDa: string | null
+  /** Righe di fattura arrivate senza ordine e non ancora chiuse. */
+  senzaOrdine: number
 }
 
 const norm = (valore: unknown) =>
@@ -94,6 +96,7 @@ export async function caricaStatoRicezioni(): Promise<StatoRicezioneLocale[]> {
         pezziArretrati: 0,
         ultimaValidazione: null,
         validataDa: null,
+        senzaOrdine: 0,
       } as StatoRicezioneLocale)
 
     const validataIl = riga.consegna_validata_il
@@ -141,9 +144,27 @@ export async function caricaStatoRicezioni(): Promise<StatoRicezioneLocale[]> {
     perLocale.set(id, stato)
   }
 
-  return Array.from(perLocale.values()).sort(
+  /*
+    La merce senza ordine si conta con lo stesso calcolo del dettaglio, locale
+    per locale: un conteggio fatto a parte finirebbe per non coincidere con le
+    righe che l'amministrazione trova aprendo il locale. Senza questo numero
+    un locale con solo merce non ordinata risultava tutto verde, e nessuno lo
+    avrebbe aperto.
+  */
+  const stati = Array.from(perLocale.values())
+
+  const conteggi = await Promise.all(
+    stati.map((stato) => caricaRicezione(stato.localeId)),
+  )
+
+  stati.forEach((stato, indice) => {
+    stato.senzaOrdine = conteggi[indice].senzaOrdine.length
+  })
+
+  return stati.sort(
     (a, b) =>
       b.pezziArretrati - a.pezziArretrati ||
+      b.senzaOrdine - a.senzaOrdine ||
       b.pezziDaRegistrare - a.pezziDaRegistrare ||
       a.localeNome.localeCompare(b.localeNome),
   )
