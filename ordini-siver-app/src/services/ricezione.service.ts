@@ -76,6 +76,29 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
     if (voce.quantita < 0) voce.quantita = 0
   }
 
+  /*
+    Gli inevasi in formato tabellare indicano la data dell'ordine da cui nasce
+    l'arretrato. Dove c'è, dice quale settimana è scoperta senza doverlo
+    dedurre imputando dalla riga più vecchia: un inevaso che cita un ordine di
+    settembre non riguarda una riga di agosto.
+  */
+  const inevasiPerOrdine = new Map<string, number>()
+
+  for (const riga of righeDocumento) {
+    if (tipoPerDocumento.get(String(riga.document_id)) !== "inevaso") continue
+
+    const codice = normalizzaCodice(riga.supplier_code)
+    const data = riga.order_date ? String(riga.order_date) : ""
+
+    if (!codice || !data) continue
+
+    const chiave = `${codice}|${settimanaDiData(data)}`
+    inevasiPerOrdine.set(
+      chiave,
+      (inevasiPerOrdine.get(chiave) || 0) + Number(riga.quantity || 0),
+    )
+  }
+
   const oggi = Date.now()
 
   // Le righe più vecchie hanno la precedenza: la merce che arriva copre prima
@@ -135,29 +158,6 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
   })
 
   // Ciò che resta dopo l'imputazione non era stato ordinato da nessuno.
-  /*
-    Gli inevasi in formato tabellare indicano la data dell'ordine da cui nasce
-    l'arretrato. Dove c'è, dice quale settimana è scoperta senza doverlo
-    dedurre imputando dalla riga più vecchia: un inevaso che cita un ordine di
-    settembre non riguarda una riga di agosto.
-  */
-  const inevasiPerOrdine = new Map<string, number>()
-
-  for (const riga of righeDocumento) {
-    if (tipoPerDocumento.get(String(riga.document_id)) !== "inevaso") continue
-
-    const codice = normalizzaCodice(riga.supplier_code)
-    const data = riga.order_date ? String(riga.order_date) : ""
-
-    if (!codice || !data) continue
-
-    const chiave = `${codice}|${settimanaDiData(data)}`
-    inevasiPerOrdine.set(
-      chiave,
-      (inevasiPerOrdine.get(chiave) || 0) + Number(riga.quantity || 0),
-    )
-  }
-
   const senzaOrdine: RigaSenzaOrdine[] = []
 
   for (const riga of righeDocumento) {
