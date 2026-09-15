@@ -83,9 +83,10 @@ export async function caricaRicezione(localeId: string): Promise<Ricezione> {
     settembre non riguarda una riga di agosto.
   */
   const inevasiPerOrdine = new Map<string, number>()
+  const inevasiValidi = ultimeVersioniInevasi(documenti)
 
   for (const riga of righeDocumento) {
-    if (tipoPerDocumento.get(String(riga.document_id)) !== "inevaso") continue
+    if (!inevasiValidi.has(String(riga.document_id))) continue
 
     const codice = normalizzaCodice(riga.supplier_code)
     const data = riga.order_date ? String(riga.order_date) : ""
@@ -345,6 +346,38 @@ async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
   if (error) throw new Error(error.message)
 
   return data || []
+}
+
+/*
+  Il riepilogo degli inevasi del fornitore elenca tutto ciò che è ancora
+  aperto per quel cliente, e si scarica di nuovo ogni settimana con lo stesso
+  nome ("ClientiInevasoOrdini010012.pdf", poi "... (7).pdf"). Sommare le
+  versioni raddoppierebbe gli inevasi: vale solo l'ultima caricata, perché
+  quelle precedenti descrivono una situazione già superata.
+*/
+function ultimeVersioniInevasi(
+  documenti: { id: unknown; file_name?: unknown; document_type?: unknown; created_at?: unknown }[],
+) {
+  const ultimaPerFonte = new Map<string, { id: string; caricato: string }>()
+
+  for (const documento of documenti) {
+    if (documento.document_type !== "inevaso") continue
+
+    const fonte = String(documento.file_name || "")
+      .toUpperCase()
+      .replace(/\.[A-Z0-9]+$/, "")
+      .replace(/\s*\(\d+\)$/, "")
+      .trim()
+
+    const caricato = String(documento.created_at || "")
+    const attuale = ultimaPerFonte.get(fonte)
+
+    if (!attuale || caricato > attuale.caricato) {
+      ultimaPerFonte.set(fonte, { id: String(documento.id), caricato })
+    }
+  }
+
+  return new Set(Array.from(ultimaPerFonte.values()).map((voce) => voce.id))
 }
 
 function normalizzaCodice(valore: unknown) {
