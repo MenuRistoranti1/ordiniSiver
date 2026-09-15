@@ -11,11 +11,11 @@ import { useToast } from "@/components/Toast"
 import { supabase } from "@/lib/supabase"
 import {
   caricaBozzaGiacenze,
+  caricaGiacenzeInviate,
   caricaProdottiGiacenze,
   inviaGiacenzeDefinitive,
   rimuoviBozzaGiacenze,
   salvaBozzaGiacenze,
-  verificaBloccoGiacenze,
 } from "@/services/inventory.service"
 import type {
   InventoryFilter,
@@ -41,6 +41,13 @@ export function useLocaleInventory() {
   const [isDraftSaving, setIsDraftSaving] = useState(false)
   const [ultimaModifica, setUltimaModifica] = useState<string | null>(null)
   const [ultimaBozza, setUltimaBozza] = useState<string | null>(null)
+
+  /*
+    Prodotti già inviati questa settimana. Un invio può essere parziale (per
+    esempio un caricamento dall'ufficio che non copre tutta la lista): quei
+    prodotti restano definitivi, gli altri si possono ancora inserire.
+  */
+  const [idsInviati, setIdsInviati] = useState<string[]>([])
 
   const [ricerca, setRicerca] = useState("")
   const [filtro, setFiltro] = useState<InventoryFilter>("tutti")
@@ -150,13 +157,13 @@ export function useLocaleInventory() {
   }
 
   async function caricaTutto(id: string) {
-    await caricaProdotti(id)
+    const elenco = await caricaProdotti(id)
     ripristinaBozza(id)
-    await controllaBlocco(id)
+    await controllaBlocco(id, elenco)
     setBozzaPronta(true)
   }
 
-  async function caricaProdotti(id: string) {
+  async function caricaProdotti(id: string): Promise<InventoryProduct[]> {
     try {
       const elenco = await caricaProdottiGiacenze(id)
       setProdotti(elenco)
@@ -173,9 +180,12 @@ export function useLocaleInventory() {
 
         return prossime
       })
+
+      return elenco
     } catch (errore) {
       console.log(errore)
       showToast("Errore caricamento prodotti", "error")
+      return []
     }
   }
 
@@ -193,12 +203,43 @@ export function useLocaleInventory() {
     }
   }
 
-  async function controllaBlocco(id: string) {
+  async function controllaBlocco(id: string, elenco: InventoryProduct[]) {
     try {
-      const giaInviate = await verificaBloccoGiacenze(id, settimanaKeyCorrente())
+      const inviate = await caricaGiacenzeInviate(id, settimanaKeyCorrente())
 
-      if (!giaInviate) {
+      const giaInviati = elenco.filter((prodotto) =>
+        inviate.has(prodotto.nome_prodotto.trim().toUpperCase()),
+      )
+
+      setIdsInviati(giaInviati.map((prodotto) => prodotto.id))
+
+      if (giaInviati.length === 0) {
         setBlocco("")
+        return
+      }
+
+      // Le quantità inviate prevalgono su qualsiasi bozza rimasta nel telefono.
+      setQuantita((attuali) => {
+        const prossime = { ...attuali }
+
+        giaInviati.forEach((prodotto) => {
+          prossime[prodotto.id] = String(
+            inviate.get(prodotto.nome_prodotto.trim().toUpperCase()) ?? "",
+          )
+        })
+
+        return prossime
+      })
+
+      if (giaInviati.length < elenco.length) {
+        setBlocco("")
+
+        // Si apre direttamente sui prodotti che mancano.
+        setIdsDaCompletare(
+          elenco
+            .filter((prodotto) => !giaInviati.includes(prodotto))
+            .map((prodotto) => prodotto.id),
+        )
         return
       }
 
@@ -210,6 +251,10 @@ export function useLocaleInventory() {
     } catch (errore) {
       console.log(errore)
     }
+  }
+
+  function prodottoInviato(prodotto: InventoryProduct) {
+    return idsInviati.includes(prodotto.id)
   }
 
   async function aggiornaPagina() {
@@ -421,8 +466,22 @@ export function useLocaleInventory() {
       return
     }
 
+    const daInviare = prodotti.filter((prodotto) => !prodottoInviato(prodotto))
+
+    if (daInviare.length === 0) {
+      showToast("Le giacenze di questa settimana sono già tutte inviate.", "warning")
+      return
+    }
+
+    const quantitaDaInviare = daInviare.reduce(
+      (totale, prodotto) => totale + Number(quantita[prodotto.id] || 0),
+      0,
+    )
+
     const conferma = window.confirm(
-      `Stai inviando le giacenze definitive per ${prodottiTotali} prodotti, quantità totale ${quantitaTotaleCompilata}. Dopo l'invio non potrai modificarle fino alla prossima settimana. Confermi?`,
+      idsInviati.length > 0
+        ? `Stai inviando le giacenze dei ${daInviare.length} prodotti mancanti, quantità totale ${quantitaDaInviare}. Dopo l'invio non potrai modificarle fino alla prossima settimana. Confermi?`
+        : `Stai inviando le giacenze definitive per ${prodottiTotali} prodotti, quantità totale ${quantitaTotaleCompilata}. Dopo l'invio non potrai modificarle fino alla prossima settimana. Confermi?`,
     )
 
     if (!conferma) return
@@ -435,7 +494,7 @@ export function useLocaleInventory() {
         localeNome,
         operatore,
         settimanaKey: settimanaKeyCorrente(),
-        prodotti,
+        prodotti: daInviare,
         quantita,
       })
 
@@ -495,6 +554,7 @@ export function useLocaleInventory() {
 
     statoSoglia,
     prodottoCompilato,
+    prodottoInviato,
     aggiornaQuantita,
     cambiaQuantita,
     aggiornaPagina,

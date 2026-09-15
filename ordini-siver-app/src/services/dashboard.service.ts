@@ -104,13 +104,29 @@ async function caricaGiacenzeInfo(
       .filter(Boolean),
   )
 
+  /*
+    Un prodotto è compilato se ha una giacenza questa settimana, anche a zero:
+    zero è un conteggio valido. Si contano solo i prodotti della lista del
+    locale, così righe di prodotti tolti dalla lista non gonfiano il totale.
+  */
+  const idsProdotti = Array.from(prodottiUnici)
+
+  const { data: nomiProdotti } = idsProdotti.length
+    ? await supabase.from("products").select("id, name").in("id", idsProdotti)
+    : { data: [] as { id: string; name: string }[] }
+
+  const nomiInviati = new Set(
+    (giacenzeSettimana || []).map((item: any) =>
+      String(item.nome_prodotto || "").trim().toUpperCase(),
+    ),
+  )
+
   const prodottiCompilatiUnici = new Set(
-    (giacenzeSettimana || [])
-      .filter((item: any) => Number(item.quantita || 0) > 0)
-      .map((item: any) =>
-        String(item.nome_prodotto || "").trim().toUpperCase(),
+    (nomiProdotti || [])
+      .filter((prodotto: any) =>
+        nomiInviati.has(String(prodotto.name || "").trim().toUpperCase()),
       )
-      .filter(Boolean),
+      .map((prodotto: any) => String(prodotto.id)),
   )
 
   const totale = prodottiUnici.size
@@ -122,7 +138,9 @@ async function caricaGiacenzeInfo(
     compilati,
     totale,
     percentuale,
-    completa: totale > 0 && percentuale >= 90,
+    // Completa solo se ogni prodotto è stato contato: un prodotto saltato
+    // verrebbe letto come esaurito e l'ordine lo proporrebbe fino al massimo.
+    completa: totale > 0 && compilati >= totale,
   }
 }
 

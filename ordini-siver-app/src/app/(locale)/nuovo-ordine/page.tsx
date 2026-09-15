@@ -180,6 +180,19 @@ export default function NuovoOrdine() {
       return
     }
 
+    /*
+      Servono le giacenze di tutti i prodotti: uno non contato verrebbe letto
+      come esaurito, e il consiglio lo proporrebbe fino al massimo.
+    */
+    const mancanti = await contaGiacenzeMancanti(id, settimanaKey)
+
+    if (mancanti > 0) {
+      setBlocco(
+        `Mancano le giacenze di ${mancanti} ${mancanti === 1 ? "prodotto" : "prodotti"}: completale dalla pagina Giacenze prima di ordinare.`
+      )
+      return
+    }
+
     const { data: ordini } = await supabase
       .from("ordini")
       .select("id")
@@ -192,6 +205,45 @@ export default function NuovoOrdine() {
         `Hai già inviato l'ordine di questa settimana. Potrai effettuare un nuovo ordine da lunedì ${prossimo}.`
       )
     }
+  }
+
+  async function contaGiacenzeMancanti(id: string, settimanaKey: string) {
+    const [{ data: impostazioni }, { data: inviate }] = await Promise.all([
+      supabase
+        .from("restaurant_product_settings")
+        .select("prodotto_id, product_id")
+        .eq("restaurant_id", id)
+        .eq("active", true),
+      supabase
+        .from("giacenze_settimana")
+        .select("nome_prodotto")
+        .eq("locale_id", id)
+        .eq("settimana_key", settimanaKey),
+    ])
+
+    const ids = Array.from(
+      new Set(
+        (impostazioni || [])
+          .map((item: any) => String(item.prodotto_id || item.product_id || ""))
+          .filter(Boolean)
+      )
+    )
+
+    if (ids.length === 0) return 0
+
+    const { data: prodottiLista } = await supabase
+      .from("products")
+      .select("name")
+      .in("id", ids)
+      .eq("active", true)
+
+    const nomiInviati = new Set(
+      (inviate || []).map((riga: any) => String(riga.nome_prodotto || "").trim().toUpperCase())
+    )
+
+    return (prodottiLista || []).filter(
+      (prodotto: any) => !nomiInviati.has(String(prodotto.name || "").trim().toUpperCase())
+    ).length
   }
 
   async function caricaProdotti(id: string) {

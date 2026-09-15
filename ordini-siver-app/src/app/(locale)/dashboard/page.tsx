@@ -113,6 +113,7 @@ export default function Dashboard() {
         <DashboardKpiCard
           label="Stato giacenze"
           value={`${giacenzeInfo.compilati}/${giacenzeInfo.totale}`}
+          onClick={() => vai("/giacenze")}
           note={`${giacenzeInfo.percentuale}% compilato`}
           icon={giacenzeOk ? CheckCircle2 : AlertTriangle}
           color={

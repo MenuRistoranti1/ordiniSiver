@@ -117,6 +117,33 @@ export async function caricaProdottiGiacenze(
     ) as InventoryProduct[]
 }
 
+/**
+ * Giacenze già inviate nella settimana, per nome prodotto (maiuscolo).
+ *
+ * Servono a distinguere un invio completo da uno parziale: se mancano dei
+ * prodotti il locale deve poterli aggiungere, mentre quelli già inviati
+ * restano definitivi.
+ */
+export async function caricaGiacenzeInviate(
+  localeId: string,
+  settimanaKey: string,
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from("giacenze_settimana")
+    .select("nome_prodotto, quantita")
+    .eq("locale_id", localeId)
+    .eq("settimana_key", settimanaKey)
+
+  if (error) throw new Error(error.message)
+
+  return new Map(
+    (data || []).map((riga) => [
+      String(riga.nome_prodotto || "").trim().toUpperCase(),
+      Number(riga.quantita || 0),
+    ]),
+  )
+}
+
 export async function verificaBloccoGiacenze(
   localeId: string,
   settimanaKey: string,

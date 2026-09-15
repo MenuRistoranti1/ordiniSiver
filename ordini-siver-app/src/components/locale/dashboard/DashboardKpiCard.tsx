@@ -6,6 +6,7 @@ type DashboardKpiCardProps = {
   note: string
   icon: LucideIcon
   color: string
+  onClick?: () => void
 }
 
 export function DashboardKpiCard({
@@ -14,9 +15,15 @@ export function DashboardKpiCard({
   note,
   icon: Icon,
   color,
+  onClick,
 }: DashboardKpiCardProps) {
+  const Contenitore = onClick ? "button" : "div"
+
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-200">
+    <Contenitore
+      {...(onClick ? { type: "button" as const, onClick } : {})}
+      className="w-full rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-200"
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -38,6 +45,6 @@ export function DashboardKpiCard({
           <Icon className="h-6 w-6" />
         </div>
       </div>
-    </div>
+    </Contenitore>
   )
 }

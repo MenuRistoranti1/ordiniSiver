@@ -51,6 +51,7 @@ export default function Giacenze() {
     setSoloDaCompilare,
     statoSoglia,
     prodottoCompilato,
+    prodottoInviato,
     aggiornaQuantita,
     cambiaQuantita,
     aggiornaPagina,
@@ -68,6 +69,16 @@ export default function Giacenze() {
   }
 
   function renderQuantitaControl(prodotto: InventoryProduct) {
+    if (prodottoInviato(prodotto)) {
+      return (
+        <div className="flex items-center justify-end">
+          <span className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-black text-green-700">
+            {quantita[prodotto.id]} · inviata
+          </span>
+        </div>
+      )
+    }
+
     return (
       <div className="flex items-center justify-end gap-2">
         <button
