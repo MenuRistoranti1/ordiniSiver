@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { FUORI_ORDINE } from "@/services/ricezione.service"
 
 /*
   Prodotti che compaiono nei documenti del fornitore ma non esistono in
@@ -128,6 +129,8 @@ export async function codificaProdotto(input: {
     .from("document_rows")
     .update({ matched_product_id: data.id, match_status: "matched" })
     .eq("supplier_code", input.supplierCode)
+    // Le righe chiuse come acquisto fuori ordine restano chiuse.
+    .or(`match_status.is.null,match_status.neq.${FUORI_ORDINE}`)
 
   if (erroreRighe) throw new Error(erroreRighe.message)
 }

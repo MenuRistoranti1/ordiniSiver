@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { settimanaKeyCorrente } from "@/lib/settimana"
-import { caricaRicezione } from "./ricezione.service"
+import { caricaRicezione, FUORI_ORDINE } from "./ricezione.service"
 import type { Ricezione } from "@/types/ricezione"
 
 /*
@@ -183,6 +183,25 @@ export async function annullaRigaOrdine(input: {
 }
 
 /**
+ * Chiude le righe di merce arrivata senza ordine: l'amministrazione ne prende
+ * atto e il locale non le vede più come anomalia. Il documento resta com'è,
+ * cambia solo lo stato delle righe.
+ */
+export async function chiudiRigheSenzaOrdine(
+  documentRowIds: string[],
+): Promise<void> {
+  if (documentRowIds.length === 0) return
+
+  const { error } = await supabase
+    .from("document_rows")
+    .update({ match_status: FUORI_ORDINE })
+    .in("id", documentRowIds)
+    .is("matched_order_id", null)
+
+  if (error) throw new Error(error.message)
+}
+
+/**
  * Riapre la ricezione di un locale: toglie la firma dalle righe, lasciando
  * intatte le quantità già inserite, così il locale riparte da quei numeri
  * invece che da zero.
@@ -254,6 +273,7 @@ async function leggiRigheFatture(idsFatture: string[]) {
       .select("id, document_id, supplier_code, quantity")
       .in("document_id", idsFatture.slice(i, i + 100))
       .is("matched_order_id", null)
+      .or(`match_status.is.null,match_status.neq.${FUORI_ORDINE}`)
 
     if (error) throw new Error(error.message)
 

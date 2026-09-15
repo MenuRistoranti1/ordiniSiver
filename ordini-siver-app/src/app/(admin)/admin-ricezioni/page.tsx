@@ -14,11 +14,12 @@ import { settimanaKeyCorrente } from "@/lib/settimana"
 import {
   annullaRigaOrdine,
   caricaDettaglioLocale,
+  chiudiRigheSenzaOrdine,
   caricaStatoRicezioni,
   riapriRicezione,
   type StatoRicezioneLocale,
 } from "@/services/ricezioni-admin.service"
-import type { Ricezione } from "@/types/ricezione"
+import type { Ricezione, RigaSenzaOrdine } from "@/types/ricezione"
 
 export default function AdminRicezioni() {
   const [stati, setStati] = useState<StatoRicezioneLocale[]>([])
@@ -35,6 +36,33 @@ export default function AdminRicezioni() {
     prodotto: string
     residuo: number
   } | null>(null)
+  const [daChiudere, setDaChiudere] = useState<RigaSenzaOrdine[] | null>(null)
+
+  async function confermaChiusuraSenzaOrdine() {
+    if (!daChiudere || !aperto) return
+
+    setSaving(true)
+    setMessaggio("")
+    setErrore("")
+
+    try {
+      await chiudiRigheSenzaOrdine(daChiudere.map((riga) => riga.documentRowId))
+
+      setMessaggio(
+        daChiudere.length === 1
+          ? `${daChiudere[0].nomeProdotto}: chiusa come acquisto fuori ordine.`
+          : `${daChiudere.length} righe chiuse come acquisto fuori ordine.`,
+      )
+
+      const localeAperto = aperto
+      setDaChiudere(null)
+      setDettaglio(await caricaDettaglioLocale(localeAperto))
+    } catch (error) {
+      setErrore(error instanceof Error ? error.message : "Errore imprevisto")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function confermaAnnullamento() {
     if (!daAnnullare || !aperto) return
@@ -347,11 +375,52 @@ export default function AdminRicezioni() {
                         </table>
 
                         {dettaglio.senzaOrdine.length > 0 && (
-                          <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
-                            {dettaglio.senzaOrdine.length} righe nei documenti
-                            senza ordine corrispondente: merce arrivata e mai
-                            ordinata, oppure ordini non registrati.
-                          </p>
+                          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="text-xs font-bold text-amber-800">
+                                {dettaglio.senzaOrdine.length} righe nei
+                                documenti senza ordine corrispondente: merce
+                                arrivata e mai ordinata, oppure ordini non
+                                registrati. Chiudile quando hai verificato.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setDaChiudere(dettaglio.senzaOrdine)}
+                                disabled={saving}
+                                className="h-9 shrink-0 rounded-xl bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700 disabled:bg-amber-300"
+                              >
+                                Chiudi tutte
+                              </button>
+                            </div>
+
+                            <div className="mt-2 space-y-1">
+                              {dettaglio.senzaOrdine.map((riga) => (
+                                <div
+                                  key={riga.documentRowId}
+                                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-black text-slate-950">
+                                      {riga.nomeProdotto}
+                                    </p>
+                                    <p className="truncate text-[11px] font-bold text-slate-500">
+                                      {riga.supplierCode || "senza codice"} ·
+                                      quantità {riga.quantita} ·{" "}
+                                      {riga.documentoNome}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDaChiudere([riga])}
+                                    disabled={saving}
+                                    className="h-8 shrink-0 rounded-lg border border-amber-300 px-2 text-[11px] font-black text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                  >
+                                    Chiudi
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -372,6 +441,21 @@ export default function AdminRicezioni() {
         loading={saving}
         onCancel={() => setDaAnnullare(null)}
         onConfirm={confermaAnnullamento}
+      />
+
+      <ConfirmDialog
+        open={!!daChiudere}
+        title={
+          daChiudere?.length === 1
+            ? "Chiudere questa riga?"
+            : `Chiudere ${daChiudere?.length || 0} righe?`
+        }
+        description="La merce resta registrata nel documento, ma viene considerata un acquisto fuori ordine: non copre nessun ordine, né ora né in futuro, e il locale non la vede più come anomalia."
+        confirmText="Chiudi"
+        cancelText="Annulla"
+        loading={saving}
+        onCancel={() => setDaChiudere(null)}
+        onConfirm={confermaChiusuraSenzaOrdine}
       />
 
       <ConfirmDialog

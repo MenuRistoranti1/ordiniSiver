@@ -254,6 +254,13 @@ export function statoDaQuantita(
   return "consegnato"
 }
 
+/*
+  Merce arrivata senza ordine di cui l'amministrazione ha preso atto: di solito
+  un acquisto fatto fuori dall'app. La riga non si abbina più a nessun ordine,
+  né a quelli di oggi né a quelli futuri, e smette di comparire come anomalia.
+*/
+export const FUORI_ORDINE = "fuori_ordine"
+
 /** Segnala all'amministrazione la merce arrivata senza ordine. */
 export async function segnalaRigheSenzaOrdine(input: {
   localeId: string
@@ -319,7 +326,10 @@ async function caricaDocumentiLocale(localeId: string) {
   return data || []
 }
 
-/** Solo le righe non ancora imputate a un ordine. */
+/**
+ * Solo le righe non ancora imputate a un ordine, e non chiuse
+ * dall'amministrazione come acquisto fuori ordine.
+ */
 async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
   if (idsDocumenti.length === 0) return []
 
@@ -330,6 +340,7 @@ async function caricaRigheDaConteggiare(idsDocumenti: string[]) {
     )
     .in("document_id", idsDocumenti)
     .is("matched_order_id", null)
+    .or(`match_status.is.null,match_status.neq.${FUORI_ORDINE}`)
 
   if (error) throw new Error(error.message)
 
