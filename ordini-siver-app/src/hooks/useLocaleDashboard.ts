@@ -180,7 +180,23 @@ export function useLocaleDashboard() {
     return "Buonasera"
   }
 
-  const statoOperativo = useMemo(() => {
+  /*
+    Ogni avviso porta dove si risolve: un avviso senza strada costringe a
+    cercare da soli la sezione giusta.
+  */
+  function vaiADispersioni() {
+    document
+      .getElementById("dispersioni")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const statoOperativo = useMemo((): {
+    titolo: string
+    testo: string
+    classe: string
+    icona: typeof AlertTriangle
+    azione?: { etichetta: string; esegui: () => void }
+  } => {
     if (giacenzeInfo.totale === 0) {
       return {
         titolo: "Prodotti non configurati",
@@ -197,6 +213,7 @@ export function useLocaleDashboard() {
           "Il nuovo ordine è bloccato finché non vengono inserite le giacenze settimanali.",
         classe: "border-amber-300 bg-amber-50 text-amber-900",
         icona: AlertTriangle,
+        azione: { etichetta: "Compila giacenze", esegui: () => vai("/giacenze") },
       }
     }
 
@@ -206,6 +223,7 @@ export function useLocaleDashboard() {
         testo: `Hai compilato ${giacenzeInfo.compilati} prodotti su ${giacenzeInfo.totale}. Completa le giacenze prima di procedere.`,
         classe: "border-amber-300 bg-amber-50 text-amber-900",
         icona: AlertTriangle,
+        azione: { etichetta: "Completa giacenze", esegui: () => vai("/giacenze") },
       }
     }
 
@@ -215,6 +233,7 @@ export function useLocaleDashboard() {
         testo: "Sono presenti possibili rotture o dispersioni da verificare.",
         classe: "border-red-300 bg-red-50 text-red-900",
         icona: AlertTriangle,
+        azione: { etichetta: "Vedi dispersioni", esegui: vaiADispersioni },
       }
     }
 
@@ -253,6 +272,7 @@ export function useLocaleDashboard() {
     vai,
     vaiNuovoOrdine,
     salutoOrario,
+    vaiADispersioni,
   }
 }
 

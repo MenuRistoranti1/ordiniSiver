@@ -40,6 +40,7 @@ export default function Dashboard() {
     vai,
     vaiNuovoOrdine,
     salutoOrario,
+    vaiADispersioni,
   } = useLocaleDashboard()
 
   return (
@@ -97,9 +98,9 @@ export default function Dashboard() {
         text={statoOperativo.testo}
         className={statoOperativo.classe}
         icon={statoOperativo.icona}
-        showAction={!giacenzeOk}
-        actionLabel="Compila giacenze"
-        onAction={() => vai("/giacenze")}
+        showAction={!!statoOperativo.azione}
+        actionLabel={statoOperativo.azione?.etichetta}
+        onAction={statoOperativo.azione?.esegui}
       />
 
       <DashboardProgress
@@ -134,6 +135,7 @@ export default function Dashboard() {
         <DashboardKpiCard
           label="Messaggi"
           value={messaggiNonLetti}
+          onClick={() => vai("/messaggi")}
           note="Non letti admin"
           icon={Bell}
           color={
@@ -146,6 +148,7 @@ export default function Dashboard() {
         <DashboardKpiCard
           label="Documenti"
           value={documentiNonLetti}
+          onClick={() => vai("/documenti")}
           note={
             documentiNonLetti > 0
               ? "Nuovi da leggere"
@@ -162,6 +165,7 @@ export default function Dashboard() {
         <DashboardKpiCard
           label="Dispersioni"
           value={totaleRotture}
+          onClick={vaiADispersioni}
           note="Totale top dispersioni"
           icon={TrendingUp}
           color={
@@ -180,13 +184,15 @@ export default function Dashboard() {
           empty="Nessun ordine trovato nel periodo."
         />
 
+        <div id="dispersioni" className="min-w-0 scroll-mt-24">
         <DashboardTopList
           title="Prodotti con possibile dispersione"
-          subtitle="Formula: prima giacenza + consegnato - ultima giacenza"
+          subtitle="Ultime 4 settimane: giacenza iniziale + consegnato - giacenza attuale"
           items={topRotti}
           empty="Servono almeno due giacenze e consegne registrate."
           danger
         />
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
