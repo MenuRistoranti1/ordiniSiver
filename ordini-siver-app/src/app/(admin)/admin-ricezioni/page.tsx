@@ -286,143 +286,147 @@ export default function AdminRicezioni() {
                       <p className="text-sm font-bold text-slate-500">
                         Caricamento dettaglio...
                       </p>
-                    ) : !dettaglio || dettaglio.righe.length === 0 ? (
-                      <p className="text-sm font-bold text-slate-500">
-                        Nessuna riga aperta per questo locale.
-                      </p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[720px] text-left text-sm">
-                          <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
-                            <tr>
-                              <th className="pb-2 pr-3">Prodotto</th>
-                              <th className="pb-2 pr-3">Settimana</th>
-                              <th className="pb-2 pr-3 text-center">Ordinati</th>
-                              <th className="pb-2 pr-3 text-center">Ricevuti</th>
-                              <th className="pb-2 pr-3 text-center">Mancano</th>
-                              <th className="pb-2 pr-3 text-center">In attesa</th>
-                              <th className="pb-2 text-right">Azione</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dettaglio.righe.map((riga) => (
-                              <tr
-                                key={riga.ordineId}
-                                className="border-t border-slate-200"
-                              >
-                                <td className="py-2 pr-3">
-                                  <p className="text-[11px] font-black text-slate-500">
-                                    {riga.supplierCode || "senza codice"}
-                                  </p>
-                                  <p className="font-black text-slate-950">
-                                    {riga.nomeProdotto}
-                                  </p>
-                                </td>
-                                <td className="py-2 pr-3 font-bold text-slate-600">
-                                  {riga.settimanaOrdine}
-                                </td>
-                                <td className="py-2 pr-3 text-center font-black text-slate-700">
-                                  {riga.quantitaOrdinata}
-                                </td>
-                                <td className="py-2 pr-3 text-center font-bold text-slate-600">
-                                  {riga.giaRicevuta}
-                                </td>
-                                <td className="py-2 pr-3 text-center font-black text-slate-950">
-                                  {riga.residuo}
-                                  {riga.propostaDaDocumenti > 0 && (
-                                    <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
-                                      {riga.propostaDaDocumenti} in fattura
-                                    </span>
-                                  )}
-
-                                  {riga.inevasoDichiarato !== null && (
-                                    <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">
-                                      {riga.inevasoDichiarato} dichiarati inevasi
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-2 pr-3 text-center">
-                                  {riga.settimaneDiAttesa >= 1 ? (
-                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">
-                                      {riga.settimaneDiAttesa} sett.
-                                    </span>
-                                  ) : (
-                                    <span className="text-[11px] font-bold text-slate-400">
-                                      ordine di questa settimana
-                                    </span>
-                                  )}
-                                </td>
-
-                                <td className="py-2 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setDaAnnullare({
-                                        ordineId: riga.ordineId,
-                                        prodotto: riga.nomeProdotto,
-                                        residuo: riga.residuo,
-                                      })
-                                    }
-                                    disabled={saving}
-                                    className="rounded-xl border border-slate-300 px-3 py-1 text-[11px] font-black text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
-                                  >
-                                    Annulla
-                                  </button>
-                                </td>
+                    ) : !dettaglio ? null : (
+                      <>
+                        {dettaglio.righe.length === 0 ? (
+                          <p className="text-sm font-bold text-slate-500">
+                            Nessuna riga aperta per questo locale.
+                          </p>
+                        ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[720px] text-left text-sm">
+                            <thead className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                              <tr>
+                                <th className="pb-2 pr-3">Prodotto</th>
+                                <th className="pb-2 pr-3">Settimana</th>
+                                <th className="pb-2 pr-3 text-center">Ordinati</th>
+                                <th className="pb-2 pr-3 text-center">Ricevuti</th>
+                                <th className="pb-2 pr-3 text-center">Mancano</th>
+                                <th className="pb-2 pr-3 text-center">In attesa</th>
+                                <th className="pb-2 text-right">Azione</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-
-                        {dettaglio.senzaOrdine.length > 0 && (
-                          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <p className="text-xs font-bold text-amber-800">
-                                {dettaglio.senzaOrdine.length} righe nei
-                                documenti senza ordine corrispondente: merce
-                                arrivata e mai ordinata, oppure ordini non
-                                registrati. Chiudile quando hai verificato.
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setDaChiudere(dettaglio.senzaOrdine)}
-                                disabled={saving}
-                                className="h-9 shrink-0 rounded-xl bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700 disabled:bg-amber-300"
-                              >
-                                Chiudi tutte
-                              </button>
-                            </div>
-
-                            <div className="mt-2 space-y-1">
-                              {dettaglio.senzaOrdine.map((riga) => (
-                                <div
-                                  key={riga.documentRowId}
-                                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2"
+                            </thead>
+                            <tbody>
+                              {dettaglio.righe.map((riga) => (
+                                <tr
+                                  key={riga.ordineId}
+                                  className="border-t border-slate-200"
                                 >
-                                  <div className="min-w-0">
-                                    <p className="truncate text-xs font-black text-slate-950">
+                                  <td className="py-2 pr-3">
+                                    <p className="text-[11px] font-black text-slate-500">
+                                      {riga.supplierCode || "senza codice"}
+                                    </p>
+                                    <p className="font-black text-slate-950">
                                       {riga.nomeProdotto}
                                     </p>
-                                    <p className="truncate text-[11px] font-bold text-slate-500">
-                                      {riga.supplierCode || "senza codice"} ·
-                                      quantità {riga.quantita} ·{" "}
-                                      {riga.documentoNome}
-                                    </p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDaChiudere([riga])}
-                                    disabled={saving}
-                                    className="h-8 shrink-0 rounded-lg border border-amber-300 px-2 text-[11px] font-black text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                                  >
-                                    Chiudi
-                                  </button>
-                                </div>
+                                  </td>
+                                  <td className="py-2 pr-3 font-bold text-slate-600">
+                                    {riga.settimanaOrdine}
+                                  </td>
+                                  <td className="py-2 pr-3 text-center font-black text-slate-700">
+                                    {riga.quantitaOrdinata}
+                                  </td>
+                                  <td className="py-2 pr-3 text-center font-bold text-slate-600">
+                                    {riga.giaRicevuta}
+                                  </td>
+                                  <td className="py-2 pr-3 text-center font-black text-slate-950">
+                                    {riga.residuo}
+                                    {riga.propostaDaDocumenti > 0 && (
+                                      <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                                        {riga.propostaDaDocumenti} in fattura
+                                      </span>
+                                    )}
+
+                                    {riga.inevasoDichiarato !== null && (
+                                      <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800">
+                                        {riga.inevasoDichiarato} dichiarati inevasi
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 pr-3 text-center">
+                                    {riga.settimaneDiAttesa >= 1 ? (
+                                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-700">
+                                        {riga.settimaneDiAttesa} sett.
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] font-bold text-slate-400">
+                                        ordine di questa settimana
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  <td className="py-2 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setDaAnnullare({
+                                          ordineId: riga.ordineId,
+                                          prodotto: riga.nomeProdotto,
+                                          residuo: riga.residuo,
+                                        })
+                                      }
+                                      disabled={saving}
+                                      className="rounded-xl border border-slate-300 px-3 py-1 text-[11px] font-black text-slate-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                                    >
+                                      Annulla
+                                    </button>
+                                  </td>
+                                </tr>
                               ))}
-                            </div>
+                            </tbody>
+                          </table>
                           </div>
                         )}
-                      </div>
+
+                      {dettaglio.senzaOrdine.length > 0 && (
+                        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs font-bold text-amber-800">
+                              {dettaglio.senzaOrdine.length} righe nei
+                              documenti senza ordine corrispondente: merce
+                              arrivata e mai ordinata, oppure ordini non
+                              registrati. Chiudile quando hai verificato.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setDaChiudere(dettaglio.senzaOrdine)}
+                              disabled={saving}
+                              className="h-9 shrink-0 rounded-xl bg-amber-600 px-3 text-xs font-black text-white hover:bg-amber-700 disabled:bg-amber-300"
+                            >
+                              Chiudi tutte
+                            </button>
+                          </div>
+
+                          <div className="mt-2 space-y-1">
+                            {dettaglio.senzaOrdine.map((riga) => (
+                              <div
+                                key={riga.documentRowId}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-black text-slate-950">
+                                    {riga.nomeProdotto}
+                                  </p>
+                                  <p className="truncate text-[11px] font-bold text-slate-500">
+                                    {riga.supplierCode || "senza codice"} ·
+                                    quantità {riga.quantita} ·{" "}
+                                    {riga.documentoNome}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setDaChiudere([riga])}
+                                  disabled={saving}
+                                  className="h-8 shrink-0 rounded-lg border border-amber-300 px-2 text-[11px] font-black text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  Chiudi
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      </>
                     )}
                   </div>
                 )}
