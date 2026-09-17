@@ -347,6 +347,9 @@ export default function AdminOrdini() {
     generaTesto(ordiniFiltrati)
   }, [ordiniFiltrati])
 
+  /* Il massimo si scrive solo dove è stato impostato: zero vuol dire "nessun tetto". */
+  const limite = (massimo: number) => (massimo > 0 ? `, massimo ${massimo}` : "")
+
   const peso = (tipo: Segnalazione["tipo"]) =>
     tipo === "oltre_massimo" ? 0 : tipo === "gia_in_arrivo" ? 1 : 2
 
@@ -603,11 +606,11 @@ export default function AdminOrdini() {
                         {riga.tipo === "oltre_massimo" &&
                           `ha ${riga.giacenza}, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante}, massimo ${riga.massimo}`}
                         {riga.tipo === "gia_in_arrivo" &&
-                          `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati`}
+                          `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati: arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
                         {riga.tipo === "piu_del_consigliato" &&
                           (riga.consigliata > 0
-                            ? `ordina ${riga.ordinata}, il consiglio era ${riga.consigliata} (ne ha ${riga.giacenza})`
-                            : `ordina ${riga.ordinata}, il sistema non ne proponeva (ne ha ${riga.giacenza})`)}
+                            ? `ordina ${riga.ordinata}, il consiglio era ${riga.consigliata}: ha ${riga.giacenza} e arriverebbe a ${riga.risultante}${limite(riga.massimo)}`
+                            : `ordina ${riga.ordinata}, il sistema non ne proponeva: ha ${riga.giacenza} e arriverebbe a ${riga.risultante}${limite(riga.massimo)}`)}
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">

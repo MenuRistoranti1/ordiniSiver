@@ -463,6 +463,13 @@ export default function NuovoOrdine() {
     l'invio, e' chi sta in sala a sapere se serve davvero, ma deve
     accorgersene prima e non dopo.
   */
+  /* Quantita' massima prevista per quel prodotto, dove e' stata impostata. */
+  function tetto(prodotto: ProdottoOrdine) {
+    return Number(prodotto.max_stock || 0) > 0
+      ? ` (massimo ${prodotto.max_stock})`
+      : ""
+  }
+
   const daControllare = useMemo(() => {
     return prodotti
       .map((prodotto) => {
@@ -784,10 +791,10 @@ export default function NuovoOrdine() {
     const avvisi = daControllare
       .map((riga) =>
         riga.motivo === "in_arrivo"
-          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, ma ${riga.prodotto.in_arrivo} sono già in arrivo`
+          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, ma ${riga.prodotto.in_arrivo} sono già in arrivo${tetto(riga.prodotto)}`
           : riga.prodotto.consigliato > 0
-            ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}`
-            : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva`,
+            ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}${tetto(riga.prodotto)}`
+            : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva${tetto(riga.prodotto)}`,
       )
       .join("\n")
 
@@ -1239,7 +1246,12 @@ export default function NuovoOrdine() {
                         <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
                           Attenzione: {prodotto.in_arrivo} pezzi sono già stati
                           ordinati e non ancora consegnati. Ne stai ordinando{" "}
-                          {qta}: conferma o correggi prima di inviare.
+                          {qta}: arriveresti a{" "}
+                          {prodotto.giacenza + prodotto.in_arrivo + Number(qta || 0)}
+                          {prodotto.max_stock > 0
+                            ? `, con un massimo di ${prodotto.max_stock}`
+                            : ""}
+                          . Conferma o correggi prima di inviare.
                           <button
                             type="button"
                             onClick={() =>
@@ -1257,8 +1269,8 @@ export default function NuovoOrdine() {
                         !righeGuardate.includes(prodotto.id) && (
                           <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                             {prodotto.consigliato > 0
-                              ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}`
-                              : `Ne ordini ${qta}: il sistema non ne proponeva`}
+                              ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}: hai ${prodotto.giacenza} e arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, con un massimo di ${prodotto.max_stock}` : ""}`
+                              : `Ne ordini ${qta}: il sistema non ne proponeva. Hai ${prodotto.giacenza} e arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, con un massimo di ${prodotto.max_stock}` : ""}`}
                             <button
                               type="button"
                               onClick={() =>
