@@ -38,26 +38,32 @@ export function quantitaConsigliata(dati: DatiConsiglio): number {
 /**
  * Motivo per cui una quantità ordinata merita una segnalazione, o null se non
  * c'è niente da dire. Non blocca: serve a far decidere con i dati davanti.
+ *
+ * Ordinare più del consigliato, di per sé, non è un errore: finché si resta
+ * sotto il massimo è una scelta legittima di chi sta in sala, e segnalarla
+ * ogni volta avrebbe solo insegnato a ignorare gli avvisi. Si segnala quando
+ * si supera il massimo, contando anche la merce già in viaggio.
  */
 export function motivoSegnalazione(input: {
   ordinata: number
-  consigliata: number
   giacenza: number
   maxStock: number
   inArrivo: number
-}): "oltre_massimo" | "piu_del_consigliato" | "gia_in_arrivo" | null {
+}): "oltre_massimo" | "oltre_massimo_con_arrivi" | "gia_in_arrivo" | null {
   const ordinata = Number(input.ordinata || 0)
   if (ordinata <= 0) return null
 
   const max = Number(input.maxStock || 0)
+  const giacenza = Number(input.giacenza || 0)
+  const inArrivo = Number(input.inArrivo || 0)
 
-  if (max > 0 && Number(input.giacenza || 0) + ordinata > max) {
-    return "oltre_massimo"
+  if (max > 0 && giacenza + ordinata > max) return "oltre_massimo"
+
+  if (max > 0 && giacenza + inArrivo + ordinata > max) {
+    return "oltre_massimo_con_arrivi"
   }
 
-  if (Number(input.inArrivo || 0) > 0) return "gia_in_arrivo"
-
-  if (ordinata > Number(input.consigliata || 0)) return "piu_del_consigliato"
+  if (inArrivo > 0) return "gia_in_arrivo"
 
   return null
 }

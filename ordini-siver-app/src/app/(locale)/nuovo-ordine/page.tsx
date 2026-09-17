@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { prossimaSettimana, settimanaKeyCorrente } from "@/lib/settimana"
-import { quantitaConsigliata } from "@/lib/consiglio"
+import { motivoSegnalazione, quantitaConsigliata } from "@/lib/consiglio"
 import { useToast } from "@/components/Toast"
 import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
@@ -463,6 +463,11 @@ export default function NuovoOrdine() {
     l'invio, e' chi sta in sala a sapere se serve davvero, ma deve
     accorgersene prima e non dopo.
   */
+  /* Dove arriverebbe la giacenza contando anche la merce gia' in viaggio. */
+  function arrivoPrevisto(prodotto: ProdottoOrdine, richiesta: number) {
+    return prodotto.giacenza + prodotto.in_arrivo + richiesta
+  }
+
   /* Quantita' massima prevista per quel prodotto, dove e' stata impostata. */
   function tetto(prodotto: ProdottoOrdine) {
     return Number(prodotto.max_stock || 0) > 0
@@ -477,15 +482,14 @@ export default function NuovoOrdine() {
 
         if (richiesta <= 0) return null
 
-        if (prodotto.in_arrivo > 0) {
-          return { prodotto, richiesta, motivo: "in_arrivo" as const }
-        }
+        const motivo = motivoSegnalazione({
+          ordinata: richiesta,
+          giacenza: prodotto.giacenza,
+          maxStock: prodotto.max_stock,
+          inArrivo: prodotto.in_arrivo,
+        })
 
-        if (richiesta > prodotto.consigliato) {
-          return { prodotto, richiesta, motivo: "sopra_consiglio" as const }
-        }
-
-        return null
+        return motivo ? { prodotto, richiesta, motivo } : null
       })
       .filter(
         (riga): riga is NonNullable<typeof riga> =>
@@ -790,11 +794,9 @@ export default function NuovoOrdine() {
 
     const avvisi = daControllare
       .map((riga) =>
-        riga.motivo === "in_arrivo"
+        riga.motivo === "gia_in_arrivo"
           ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, ma ${riga.prodotto.in_arrivo} sono già in arrivo${tetto(riga.prodotto)}`
-          : riga.prodotto.consigliato > 0
-            ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}${tetto(riga.prodotto)}`
-            : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva${tetto(riga.prodotto)}`,
+          : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta} e arriveresti a ${arrivoPrevisto(riga.prodotto, riga.richiesta)}${tetto(riga.prodotto)}`,
       )
       .join("\n")
 
@@ -1240,48 +1242,40 @@ export default function NuovoOrdine() {
                         </button>
                       </div>
 
-                      {Number(qta || 0) > 0 &&
-                        prodotto.in_arrivo > 0 &&
-                        !righeGuardate.includes(prodotto.id) && (
-                        <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                          Attenzione: {prodotto.in_arrivo} pezzi sono già stati
-                          ordinati e non ancora consegnati. Ne stai ordinando{" "}
-                          {qta}: arriveresti a{" "}
-                          {prodotto.giacenza + prodotto.in_arrivo + Number(qta || 0)}
-                          {prodotto.max_stock > 0
-                            ? `, con un massimo di ${prodotto.max_stock}`
-                            : ""}
-                          . Conferma o correggi prima di inviare.
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setRigheGuardate((attuali) => [...attuali, prodotto.id])
-                            }
-                            className="ml-2 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-900"
-                          >
-                            Va bene così
-                          </button>
-                        </p>
-                      )}
+                      {(() => {
+                        const richiesta = Number(qta || 0)
 
-                      {Number(qta || 0) > prodotto.consigliato &&
-                        prodotto.in_arrivo === 0 &&
-                        !righeGuardate.includes(prodotto.id) && (
-                          <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            {prodotto.consigliato > 0
-                              ? `Ne ordini ${qta} invece dei ${prodotto.consigliato} consigliati: arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, dentro il massimo di ${prodotto.max_stock}` : ""}`
-                              : `Ne ordini ${qta} ma non ne servivano: ne hai ${prodotto.giacenza}${prodotto.min_stock > 0 ? `, sopra il minimo di ${prodotto.min_stock}` : ""}. Arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, dentro il massimo di ${prodotto.max_stock}` : ""}`}
+                        const motivo = motivoSegnalazione({
+                          ordinata: richiesta,
+                          giacenza: prodotto.giacenza,
+                          maxStock: prodotto.max_stock,
+                          inArrivo: prodotto.in_arrivo,
+                        })
+
+                        if (!motivo || righeGuardate.includes(prodotto.id)) return null
+
+                        const testo =
+                          motivo === "gia_in_arrivo"
+                            ? `${prodotto.in_arrivo} pezzi sono già stati ordinati e non ancora consegnati: ne stai ordinando altri ${richiesta}.`
+                            : motivo === "oltre_massimo_con_arrivi"
+                              ? `Hai ${prodotto.giacenza} pezzi e ${prodotto.in_arrivo} in arrivo: con altri ${richiesta} arriveresti a ${arrivoPrevisto(prodotto, richiesta)}, oltre il massimo di ${prodotto.max_stock}.`
+                              : `Con ${richiesta} arriveresti a ${prodotto.giacenza + richiesta}, oltre il massimo di ${prodotto.max_stock}.`
+
+                        return (
+                          <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                            {testo}{" "}
                             <button
                               type="button"
                               onClick={() =>
                                 setRigheGuardate((attuali) => [...attuali, prodotto.id])
                               }
-                              className="ml-2 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-900"
+                              className="ml-1 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-900"
                             >
                               Va bene così
                             </button>
                           </p>
-                        )}
+                        )
+                      })()}
                     </div>
                   )
                 })}

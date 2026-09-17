@@ -16,7 +16,7 @@ type Segnalazione = {
   chiave: string
   /** Righe d'ordine da correggere: una per locale, prodotto e settimana. */
   ordineIds: string[]
-  tipo: "oltre_massimo" | "piu_del_consigliato" | "gia_in_arrivo"
+  tipo: "oltre_massimo" | "oltre_massimo_con_arrivi" | "gia_in_arrivo"
   locale: string
   prodotto: string
   ordinata: number
@@ -30,8 +30,8 @@ type Segnalazione = {
 
 const TESTO_TIPO: Record<Segnalazione["tipo"], string> = {
   oltre_massimo: "oltre il massimo",
+  oltre_massimo_con_arrivi: "oltre il massimo con gli arrivi",
   gia_in_arrivo: "già in arrivo",
-  piu_del_consigliato: "più del consigliato",
 }
 
 export default function AdminOrdini() {
@@ -213,7 +213,6 @@ export default function AdminOrdini() {
 
       const tipo = motivoSegnalazione({
         ordinata,
-        consigliata,
         giacenza,
         maxStock: soglia.max,
         inArrivo,
@@ -352,15 +351,8 @@ export default function AdminOrdini() {
   /* Il massimo si scrive solo dove è stato impostato: zero vuol dire "nessun tetto". */
   const limite = (massimo: number) => (massimo > 0 ? `, massimo ${massimo}` : "")
 
-  /*
-    Qui il massimo non è la ragione dell'avviso: dirlo e basta faceva sembrare
-    che ci fosse uno sforamento anche quando la quantità ci sta dentro.
-  */
-  const dentroIlMassimo = (massimo: number) =>
-    massimo > 0 ? `, dentro il massimo di ${massimo}` : ""
-
   const peso = (tipo: Segnalazione["tipo"]) =>
-    tipo === "oltre_massimo" ? 0 : tipo === "gia_in_arrivo" ? 1 : 2
+    tipo === "oltre_massimo" ? 0 : tipo === "oltre_massimo_con_arrivi" ? 1 : 2
 
   const segnalazioniVisibili = useMemo(() => {
     const idVisibili = new Set(
@@ -614,12 +606,10 @@ export default function AdminOrdini() {
                       <p className="mt-1">
                         {riga.tipo === "oltre_massimo" &&
                           `ha ${riga.giacenza}, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante}, massimo ${riga.massimo}`}
+                        {riga.tipo === "oltre_massimo_con_arrivi" &&
+                          `ha ${riga.giacenza} e ${riga.inArrivo} in arrivo, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
                         {riga.tipo === "gia_in_arrivo" &&
                           `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati: arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
-                        {riga.tipo === "piu_del_consigliato" &&
-                          (riga.consigliata > 0
-                            ? `ordina ${riga.ordinata} invece dei ${riga.consigliata} consigliati. Arriverebbe a ${riga.risultante}${dentroIlMassimo(riga.massimo)}`
-                            : `ordina ${riga.ordinata} ma non ne servivano: ne ha ${riga.giacenza}${riga.minimo > 0 ? `, sopra il minimo di ${riga.minimo}` : ""}. Arriverebbe a ${riga.risultante}${dentroIlMassimo(riga.massimo)}`)}
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">
