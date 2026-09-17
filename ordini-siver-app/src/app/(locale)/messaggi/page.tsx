@@ -31,7 +31,7 @@ export default function MessaggiLocalePage() {
       <header className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
               Comunicazioni
             </p>
 
@@ -49,7 +49,7 @@ export default function MessaggiLocalePage() {
             type="button"
             onClick={() => void aggiornaMessaggi(localeId)}
             disabled={loading || !localeId}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-400"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-400"
           >
             <RefreshCw
               className={`h-5 w-5 ${loading ? "animate-spin" : ""}`}
@@ -106,7 +106,7 @@ export default function MessaggiLocalePage() {
                     : "mr-auto border border-slate-200 bg-white text-slate-950"
                 }`}
               >
-                <p className="mb-2 text-xs font-black uppercase tracking-wide opacity-75">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-75">
                   {inviatoDalLocale
                     ? msg.nome_mittente || localeNome
                     : "Admin"}

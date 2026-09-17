@@ -26,7 +26,7 @@ export function DashboardKpiCard({
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {label}
           </p>
 

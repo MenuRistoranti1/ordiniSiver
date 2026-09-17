@@ -143,11 +143,11 @@ export function LocaleShell({ children }: LocaleShellProps) {
           </div>
 
           <div className="mb-5 rounded-3xl bg-slate-900 p-3">
-            <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               Locale attivo
             </p>
 
-            <div className="truncate rounded-2xl bg-slate-800 px-3 py-3 text-sm font-black text-white">
+            <div className="truncate rounded-2xl bg-slate-800 px-3 py-3 text-sm font-bold text-white">
               {localeNome}
             </div>
           </div>
@@ -175,7 +175,7 @@ export function LocaleShell({ children }: LocaleShellProps) {
                   </span>
 
                   {badge > 0 && (
-                    <span className="animate-pulse rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-black text-white">
+                    <span className="animate-pulse rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                       {badge}
                     </span>
                   )}
@@ -187,7 +187,7 @@ export function LocaleShell({ children }: LocaleShellProps) {
           <button
             type="button"
             onClick={logout}
-            className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-black text-white transition hover:bg-red-600"
+            className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-bold text-white transition hover:bg-red-600"
           >
             <LogOut className="h-4 w-4" />
             Logout

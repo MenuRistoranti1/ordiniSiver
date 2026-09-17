@@ -72,7 +72,7 @@ export default function Giacenze() {
     if (prodottoInviato(prodotto)) {
       return (
         <div className="flex items-center justify-end">
-          <span className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-black text-green-700">
+          <span className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
             {quantita[prodotto.id]} · inviata
           </span>
         </div>
@@ -137,7 +137,7 @@ export default function Giacenze() {
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
             <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">{value}</p>
             <p className="text-sm font-bold text-slate-500">{note}</p>
           </div>
@@ -147,14 +147,14 @@ export default function Giacenze() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 pb-32 pt-4 sm:px-5 lg:px-8">
+    <main className="min-h-screen bg-slate-100 px-3 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-4">
         <LocaleMobileHeader />
 
         <header className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-600">Giacenze settimana</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Giacenze settimana</p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
                 {salutoOrario()} {operatore}
               </h1>
@@ -170,7 +170,7 @@ export default function Giacenze() {
                 type="button"
                 onClick={() => (window.location.href = "/dashboard")}
                 disabled={isSaving}
-                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:bg-slate-400"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:bg-slate-400"
               >
                 <Home className="h-5 w-5" />
                 Home
@@ -180,22 +180,22 @@ export default function Giacenze() {
                 type="button"
                 onClick={aggiornaPagina}
                 disabled={loading || isSaving}
-                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-400"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:bg-slate-400"
               >
                 <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
                 Aggiorna
               </button>
 
               <div className="rounded-2xl bg-blue-50 p-3">
-                <p className="text-[11px] font-black uppercase text-blue-600">Settimana</p>
-                <p className="mt-1 text-sm font-black text-blue-900">{periodoSettimana()}</p>
+                <p className="text-[11px] font-semibold uppercase text-blue-600">Settimana</p>
+                <p className="mt-1 text-sm font-bold text-blue-900">{periodoSettimana()}</p>
               </div>
             </div>
           </div>
         </header>
 
         {blocco && (
-          <section className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm font-black text-amber-900 shadow-sm">
+          <section className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900 shadow-sm">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <span>{blocco}</span>
@@ -208,10 +208,10 @@ export default function Giacenze() {
             <div className="min-w-0 flex-1">
               <div className="mb-2 flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Avanzamento compilazione</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Avanzamento compilazione</p>
                   <p className="mt-1 text-3xl font-black text-slate-950">{percentualeCompilazione}%</p>
                 </div>
-                <p className="text-sm font-black text-slate-500">
+                <p className="text-sm font-bold text-slate-500">
                   {prodottiCompilati} di {prodottiTotali} prodotti
                 </p>
               </div>
@@ -229,7 +229,7 @@ export default function Giacenze() {
                 <User className="h-4 w-4 text-blue-600" />
                 <span className="truncate">{operatore}</span>
               </div>
-              <p className="mt-1 text-xs font-black text-slate-400">
+              <p className="mt-1 text-xs font-semibold text-slate-400">
                 {ultimaBozza
                   ? `Bozza salvata alle ${new Date(ultimaBozza).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`
                   : "Nessuna bozza salvata"}
@@ -310,7 +310,7 @@ export default function Giacenze() {
             <button
               type="button"
               onClick={() => setSoloDaCompilare(!soloDaCompilare)}
-              className={`inline-flex h-14 items-center justify-center rounded-2xl border-2 px-4 text-sm font-black transition-all ${
+              className={`inline-flex h-14 items-center justify-center rounded-2xl border-2 px-4 text-sm font-bold transition-all ${
                 soloDaCompilare
                   ? "border-blue-600 bg-blue-600 text-white"
                   : "border-blue-100 bg-blue-50 text-blue-700"
@@ -323,7 +323,7 @@ export default function Giacenze() {
               type="button"
               onClick={aggiornaPagina}
               disabled={loading || isSaving}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white disabled:bg-slate-400"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:bg-slate-400"
             >
               <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
               Aggiorna
@@ -333,12 +333,12 @@ export default function Giacenze() {
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
-            <div className="p-8 text-center text-sm font-black text-slate-500">
+            <div className="p-8 text-center text-sm font-bold text-slate-500">
               Caricamento prodotti...
             </div>
           ) : (
             <>
-              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.2fr_150px_160px_160px_230px]">
+              <div className="hidden bg-slate-950 text-[11px] font-semibold uppercase tracking-wide text-white md:grid md:grid-cols-[1.2fr_150px_160px_160px_230px]">
                 <div className="px-4 py-3">Prodotto</div>
                 <div className="px-4 py-3 text-center">Attuale</div>
                 <div className="px-4 py-3 text-center">Range</div>
@@ -364,7 +364,7 @@ export default function Giacenze() {
                       }`}
                     >
                       <div className="min-w-0 px-4 py-3">
-                        <p className="text-xs font-black text-slate-500">{prodotto.supplier_code || "-"}</p>
+                        <p className="text-xs font-semibold text-slate-500">{prodotto.supplier_code || "-"}</p>
                         <h3 className="mt-1 truncate text-base font-black text-slate-950">{prodotto.nome_prodotto}</h3>
                       </div>
 
@@ -378,7 +378,7 @@ export default function Giacenze() {
                       </div>
 
                       <div className="px-4 py-3 text-center">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-black uppercase ${classeStato(stato)}`}>
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
                           {stato}
                         </span>
                       </div>
@@ -405,14 +405,14 @@ export default function Giacenze() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-black text-slate-500">{prodotto.supplier_code || "-"}</p>
-                          <h3 className="mt-1 text-sm font-black leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
+                          <p className="text-[11px] font-semibold text-slate-500">{prodotto.supplier_code || "-"}</p>
+                          <h3 className="mt-1 text-sm font-bold leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
 
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-700">
+                            <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
                               Range: {prodotto.min_stock}/{prodotto.max_stock}
                             </span>
-                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${classeStato(stato)}`}>
+                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${classeStato(stato)}`}>
                               {stato}
                             </span>
                           </div>
@@ -435,16 +435,16 @@ export default function Giacenze() {
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-8">
             <div>
-              <p className="text-[11px] font-black uppercase text-slate-400">Prodotti compilati</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Prodotti compilati</p>
               <p className="text-xl font-black">{prodottiCompilati} / {prodottiTotali}</p>
             </div>
 
             <div>
-              <p className="text-[11px] font-black uppercase text-slate-400">Quantità totale</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Quantità totale</p>
               <p className="text-xl font-black">{quantitaTotaleCompilata} pezzi</p>
             </div>
           </div>

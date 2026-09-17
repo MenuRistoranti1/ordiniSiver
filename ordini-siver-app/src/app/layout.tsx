@@ -36,6 +36,12 @@ icons: {
 
 export const viewport: Viewport = {
   themeColor: "#07122A",
+  /*
+    Con la barra di stato trasparente la pagina occupa tutto lo schermo:
+    serve "cover" perché env(safe-area-inset-*) smetta di valere zero e le
+    barre fisse possano stare sopra la barra dei gesti dell'iPhone.
+  */
+  viewportFit: "cover",
 }
 
 export default function RootLayout({

@@ -749,7 +749,7 @@ export default function NuovoOrdine() {
   function KpiCard({ label, value, note }: { label: string; value: string | number; note: string }) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
         <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
         <p className="mt-1 text-xs font-bold text-slate-500">{note}</p>
       </div>
@@ -757,14 +757,14 @@ export default function NuovoOrdine() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 pb-28 pt-4 sm:px-5 lg:px-8">
+    <main className="min-h-screen bg-slate-100 px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-4">
         <LocaleMobileHeader />
 
         <header className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-600">Nuovo ordine settimanale</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Nuovo ordine settimanale</p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
                 {salutoOrario()} {operatore}
               </h1>
@@ -778,22 +778,22 @@ export default function NuovoOrdine() {
                 type="button"
                 onClick={() => (window.location.href = "/dashboard")}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:bg-slate-400"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:bg-slate-400"
               >
                 <Home className="h-5 w-5" />
                 Home
               </button>
 
               <div className="rounded-2xl bg-blue-50 p-3">
-                <p className="text-[11px] font-black uppercase text-blue-600">Prodotti</p>
+                <p className="text-[11px] font-semibold uppercase text-blue-600">Prodotti</p>
                 <p className="mt-1 text-2xl font-black text-blue-800">{numeroRigheOrdine}</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3">
-                <p className="text-[11px] font-black uppercase text-slate-500">Pezzi</p>
+                <p className="text-[11px] font-semibold uppercase text-slate-500">Pezzi</p>
                 <p className="mt-1 text-2xl font-black text-slate-950">{quantitaTotaleOrdine}</p>
               </div>
               <div className="col-span-2 rounded-2xl bg-emerald-50 p-3 sm:col-span-1">
-                <p className="text-[11px] font-black uppercase text-emerald-700">Consigliati</p>
+                <p className="text-[11px] font-semibold uppercase text-emerald-700">Consigliati</p>
                 <p className="mt-1 text-2xl font-black text-emerald-800">{consigliatiDisponibili}</p>
               </div>
             </div>
@@ -805,7 +805,7 @@ export default function NuovoOrdine() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
               <div className="min-w-0">
-                <p className="text-sm font-black text-amber-900">
+                <p className="text-sm font-bold text-amber-900">
                   {pezziInArrivo} pezzi sono già stati ordinati e non sono ancora
                   arrivati
                 </p>
@@ -819,7 +819,7 @@ export default function NuovoOrdine() {
                   {prodottiInArrivo.map((p) => (
                     <span
                       key={p.id}
-                      className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-[11px] font-black text-amber-900"
+                      className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900"
                     >
                       {p.nome_prodotto}: {p.in_arrivo}
                     </span>
@@ -831,7 +831,7 @@ export default function NuovoOrdine() {
         )}
 
         {blocco && (
-          <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-black text-red-800 shadow-sm">
+          <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800 shadow-sm">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <span>{blocco}</span>
@@ -877,7 +877,7 @@ export default function NuovoOrdine() {
             <button
               type="button"
               onClick={() => setSoloSelezionati(!soloSelezionati)}
-              className={`inline-flex h-14 items-center justify-center rounded-2xl border-2 px-4 text-sm font-black transition-all ${
+              className={`inline-flex h-14 items-center justify-center rounded-2xl border-2 px-4 text-sm font-bold transition-all ${
                 soloSelezionati
                   ? "border-blue-600 bg-blue-600 text-white"
                   : "border-blue-100 bg-blue-50 text-blue-700"
@@ -889,7 +889,7 @@ export default function NuovoOrdine() {
             <button
               type="button"
               onClick={() => setRiepilogoAperto(!riepilogoAperto)}
-              className="inline-flex h-14 items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-black text-white"
+              className="inline-flex h-14 items-center justify-center rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white"
             >
               {riepilogoAperto ? "Chiudi riepilogo" : "Riepilogo"}
             </button>
@@ -899,7 +899,7 @@ export default function NuovoOrdine() {
             <button
               onClick={applicaConsigliati}
               disabled={!!blocco || isSaving || loading}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 text-sm font-black text-white disabled:bg-slate-400"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 text-sm font-bold text-white disabled:bg-slate-400"
             >
               <Sparkles className="h-5 w-5" />
               Applica ordine consigliato
@@ -908,7 +908,7 @@ export default function NuovoOrdine() {
             <button
               onClick={svuotaOrdine}
               disabled={!!blocco || isSaving || loading}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 text-sm font-black text-white disabled:bg-slate-400"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 text-sm font-bold text-white disabled:bg-slate-400"
             >
               <RotateCcw className="h-5 w-5" />
               Svuota quantità
@@ -926,7 +926,7 @@ export default function NuovoOrdine() {
           <section className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-blue-600">Riepilogo ordine</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Riepilogo ordine</p>
                 <h2 className="text-xl font-black text-slate-950">
                   {numeroRigheOrdine} prodotti · {quantitaTotaleOrdine} pezzi
                 </h2>
@@ -937,11 +937,11 @@ export default function NuovoOrdine() {
               {prodottiSelezionati.map((prodotto) => (
                 <div key={prodotto.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-black text-slate-900">{prodotto.nome_prodotto}</p>
+                    <p className="truncate text-xs font-semibold text-slate-900">{prodotto.nome_prodotto}</p>
                     <p className="text-[10px] font-bold text-slate-500">{prodotto.supplier_code || "-"}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-950 shadow-sm">
+                    <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-950 shadow-sm">
                       {quantita[prodotto.id]}
                     </span>
                     <button
@@ -958,10 +958,10 @@ export default function NuovoOrdine() {
               {righeAnagraficaSelezionate.map((riga, index) => (
                 <div key={`${riga.product_id}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl bg-blue-50 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-black text-slate-900">{riga.prodotto?.name}</p>
+                    <p className="truncate text-xs font-semibold text-slate-900">{riga.prodotto?.name}</p>
                     <p className="text-[10px] font-bold text-blue-700">Da anagrafica · {riga.prodotto?.supplier_code || "-"}</p>
                   </div>
-                  <span className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-950 shadow-sm">
+                  <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-950 shadow-sm">
                     {riga.quantita}
                   </span>
                 </div>
@@ -970,10 +970,10 @@ export default function NuovoOrdine() {
               {righeLibereSelezionate.map((riga, index) => (
                 <div key={`${riga.nome_prodotto}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl bg-amber-50 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-black text-slate-900">{riga.nome_prodotto}</p>
+                    <p className="truncate text-xs font-semibold text-slate-900">{riga.nome_prodotto}</p>
                     <p className="text-[10px] font-bold text-amber-700">Fuori anagrafica · {riga.misura}</p>
                   </div>
-                  <span className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-950 shadow-sm">
+                  <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-slate-950 shadow-sm">
                     {riga.quantita}
                   </span>
                 </div>
@@ -989,7 +989,7 @@ export default function NuovoOrdine() {
             <div className="p-8 text-center text-sm font-bold text-slate-500">Caricamento prodotti...</div>
           ) : (
             <>
-              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white lg:grid lg:grid-cols-[140px_1fr_160px_160px_160px_190px]">
+              <div className="hidden bg-slate-950 text-[11px] font-semibold uppercase tracking-wide text-white lg:grid lg:grid-cols-[140px_1fr_160px_160px_160px_190px]">
                 <div className="px-4 py-3">Codice</div>
                 <div className="px-4 py-3">Prodotto</div>
                 <div className="px-4 py-3 text-right">Attuale</div>
@@ -1010,14 +1010,14 @@ export default function NuovoOrdine() {
                         index % 2 === 0 ? "bg-white" : "bg-slate-50"
                       } ${highlightConsigliati && Number(qta || 0) > 0 ? "ring-2 ring-inset ring-green-200" : ""}`}
                     >
-                      <div className="px-4 py-4 text-xs font-black text-slate-500">{prodotto.supplier_code || "-"}</div>
+                      <div className="px-4 py-4 text-xs font-semibold text-slate-500">{prodotto.supplier_code || "-"}</div>
 
                       <div className="min-w-0 px-4 py-4">
-                        <p className="truncate text-sm font-black text-slate-950">{prodotto.nome_prodotto}</p>
+                        <p className="truncate text-sm font-bold text-slate-950">{prodotto.nome_prodotto}</p>
                         <p className="mt-0.5 text-[11px] font-bold text-slate-500">Media storica: {prodotto.media_storica || 0}</p>
 
                         {prodotto.in_arrivo > 0 && (
-                          <span className="mt-1 inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-black text-amber-800">
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                             già ordinati e non arrivati: {prodotto.in_arrivo}
                           </span>
                         )}
@@ -1034,7 +1034,7 @@ export default function NuovoOrdine() {
                       </div>
 
                       <div className="px-4 py-4">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-black uppercase ${classeStato(stato)}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
                           {stato === "Corretto" ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
                           {stato}
                         </span>
@@ -1085,29 +1085,29 @@ export default function NuovoOrdine() {
                     <div key={`${prodotto.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-black text-slate-500">{prodotto.supplier_code || "-"}</p>
-                          <h3 className="mt-1 text-sm font-black leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
+                          <p className="text-[11px] font-semibold text-slate-500">{prodotto.supplier_code || "-"}</p>
+                          <h3 className="mt-1 text-sm font-bold leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
 
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             <div className="rounded-xl bg-slate-50 p-2">
-                              <p className="text-[10px] font-black uppercase text-slate-500">Attuale</p>
+                              <p className="text-[10px] font-semibold uppercase text-slate-500">Attuale</p>
                               <p className="text-lg font-black text-slate-950">{prodotto.giacenza}</p>
                             </div>
                             <div className="rounded-xl bg-slate-50 p-2">
-                              <p className="text-[10px] font-black uppercase text-slate-500">Target</p>
+                              <p className="text-[10px] font-semibold uppercase text-slate-500">Target</p>
                               <p className="text-lg font-black text-slate-950">{targetProdotto(prodotto)}</p>
                             </div>
                           </div>
 
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-700">Media {prodotto.media_storica || 0}</span>
+                            <span className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">Media {prodotto.media_storica || 0}</span>
                             {prodotto.in_arrivo > 0 && (
-                              <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800">
+                              <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
                                 in arrivo {prodotto.in_arrivo}
                               </span>
                             )}
-                            <span className="rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-black text-orange-700">Min/Max {prodotto.min_stock}/{prodotto.max_stock}</span>
-                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${classeStato(stato)}`}>{stato}</span>
+                            <span className="rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">Min/Max {prodotto.min_stock}/{prodotto.max_stock}</span>
+                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${classeStato(stato)}`}>{stato}</span>
                           </div>
                         </div>
                       </div>
@@ -1216,7 +1216,7 @@ export default function NuovoOrdine() {
                 <button
                   onClick={() => rimuoviRigaAnagrafica(index)}
                   disabled={!!blocco || isSaving}
-                  className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-red-100 bg-red-50 px-3 text-sm font-black text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
+                  className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-red-100 bg-red-50 px-3 text-sm font-bold text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Rimuovi
@@ -1228,7 +1228,7 @@ export default function NuovoOrdine() {
           <button
             onClick={aggiungiRigaAnagrafica}
             disabled={!!blocco || isSaving}
-            className="mt-3 h-14 w-full rounded-2xl bg-blue-700 px-4 text-sm font-black text-white disabled:bg-slate-400"
+            className="mt-3 h-14 w-full rounded-2xl bg-blue-700 px-4 text-sm font-bold text-white disabled:bg-slate-400"
           >
             + Aggiungi prodotto da anagrafica
           </button>
@@ -1299,7 +1299,7 @@ export default function NuovoOrdine() {
                 <button
                   onClick={() => rimuoviRigaLibera(index)}
                   disabled={!!blocco || isSaving}
-                  className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-red-100 bg-red-50 px-3 text-sm font-black text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
+                  className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border-2 border-red-100 bg-red-50 px-3 text-sm font-bold text-red-700 disabled:bg-slate-200 disabled:text-slate-500 lg:col-span-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Rimuovi
@@ -1311,22 +1311,22 @@ export default function NuovoOrdine() {
           <button
             onClick={aggiungiRigaLibera}
             disabled={!!blocco || isSaving}
-            className="mt-3 h-14 w-full rounded-2xl bg-slate-950 px-4 text-sm font-black text-white disabled:bg-slate-400"
+            className="mt-3 h-14 w-full rounded-2xl bg-slate-950 px-4 text-sm font-bold text-white disabled:bg-slate-400"
           >
             + Aggiungi prodotto fuori anagrafica
           </button>
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:items-center sm:gap-4">
             <div>
-              <p className="text-[11px] font-black uppercase text-slate-500">Prodotti</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-500">Prodotti</p>
               <p className="font-black text-slate-950">{numeroRigheOrdine}</p>
             </div>
             <div>
-              <p className="text-[11px] font-black uppercase text-slate-500">Pezzi</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-500">Pezzi</p>
               <p className="font-black text-slate-950">{quantitaTotaleOrdine}</p>
             </div>
           </div>

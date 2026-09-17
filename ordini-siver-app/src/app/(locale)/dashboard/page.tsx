@@ -47,7 +47,7 @@ export default function Dashboard() {
     <LocaleShell>
       {localiDisponibili.length > 1 && (
         <section className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-500">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Locale attivo
           </p>
 
@@ -55,7 +55,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => setSelectorAperto((value) => !value)}
-              className="flex w-full items-center justify-between gap-2 rounded-2xl bg-slate-950 px-4 py-4 text-left text-sm font-black text-white"
+              className="flex w-full items-center justify-between gap-2 rounded-2xl bg-slate-950 px-4 py-4 text-left text-sm font-bold text-white"
             >
               <span className="truncate">
                 {localeNome || "Seleziona locale"}
@@ -70,7 +70,7 @@ export default function Dashboard() {
                     key={locale.restaurant_id}
                     type="button"
                     onClick={() => cambiaLocale(locale)}
-                    className={`w-full px-4 py-3 text-left text-sm font-black hover:bg-blue-50 ${
+                    className={`w-full px-4 py-3 text-left text-sm font-bold hover:bg-blue-50 ${
                       String(locale.restaurant_id) === String(localeId)
                         ? "bg-blue-600 text-white hover:bg-blue-600"
                         : ""
@@ -110,7 +110,129 @@ export default function Dashboard() {
         color={giacenzeOk ? "green" : "amber"}
       />
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <button
+          type="button"
+          onClick={() => vai("/giacenze")}
+          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            Step 1
+          </p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            Giacenze settimana
+          </h2>
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            Inserisci o controlla le giacenze obbligatorie settimanali.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={vaiNuovoOrdine}
+          className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 ${
+            giacenzeOk
+              ? "border-slate-200 bg-white hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
+              : "cursor-not-allowed border-amber-300 bg-amber-50"
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            {giacenzeOk ? "Step 2" : "Bloccato"}
+          </p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            {giacenzeOk ? "Nuovo ordine" : "Nuovo ordine bloccato"}
+          </h2>
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            {giacenzeOk
+              ? "Compila e invia l'ordine della settimana."
+              : "Devi prima completare le giacenze."}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => vai("/storico-giacenze")}
+          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Archivio
+          </p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            Storico giacenze
+          </h2>
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            Consulta le giacenze già inviate.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => vai("/storico-ordini")}
+          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Archivio
+          </p>
+          <h2 className="mt-2 text-xl font-black text-slate-950">
+            Storico ordini
+          </h2>
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            Consulta gli ordini già inviati.
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => vai("/documenti")}
+          className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+            documentiNonLetti > 0
+              ? "border-red-200 bg-red-50 hover:border-red-300"
+              : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Documenti
+              </p>
+              <h2 className="mt-2 text-xl font-black text-slate-950">
+                Documenti locale
+              </h2>
+            </div>
+
+            {documentiNonLetti > 0 && (
+              <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white">
+                {documentiNonLetti} nuovi
+              </span>
+            )}
+          </div>
+
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            {documentiNonLetti > 0
+              ? `Hai ${documentiNonLetti} documenti da leggere.`
+              : "Nessun nuovo documento. Puoi consultare l'archivio completo."}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => vai("/messaggi")}
+          className="rounded-3xl bg-blue-700 p-5 text-left text-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:bg-blue-800 hover:shadow-xl hover:shadow-blue-500/20"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-100">
+            Comunicazioni
+          </p>
+          <h2 className="mt-2 text-xl font-black">
+            Messaggi con admin
+          </h2>
+          <p className="mt-2 text-sm font-bold text-blue-100">
+            Scrivi segnalazioni, richieste o comunicazioni
+            all&apos;amministrazione.
+          </p>
+        </button>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <DashboardKpiCard
           label="Stato giacenze"
           value={`${giacenzeInfo.compilati}/${giacenzeInfo.totale}`}
@@ -195,127 +317,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => vai("/giacenze")}
-          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-blue-600">
-            Step 1
-          </p>
-          <h2 className="mt-2 text-xl font-black text-slate-950">
-            Giacenze settimana
-          </h2>
-          <p className="mt-2 text-sm font-bold text-slate-600">
-            Inserisci o controlla le giacenze obbligatorie settimanali.
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={vaiNuovoOrdine}
-          className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 ${
-            giacenzeOk
-              ? "border-slate-200 bg-white hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
-              : "cursor-not-allowed border-amber-300 bg-amber-50"
-          }`}
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-blue-600">
-            {giacenzeOk ? "Step 2" : "Bloccato"}
-          </p>
-          <h2 className="mt-2 text-xl font-black text-slate-950">
-            {giacenzeOk ? "Nuovo ordine" : "Nuovo ordine bloccato"}
-          </h2>
-          <p className="mt-2 text-sm font-bold text-slate-600">
-            {giacenzeOk
-              ? "Compila e invia l'ordine della settimana."
-              : "Devi prima completare le giacenze."}
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => vai("/storico-giacenze")}
-          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Archivio
-          </p>
-          <h2 className="mt-2 text-xl font-black text-slate-950">
-            Storico giacenze
-          </h2>
-          <p className="mt-2 text-sm font-bold text-slate-600">
-            Consulta le giacenze già inviate.
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => vai("/storico-ordini")}
-          className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50 hover:shadow-xl"
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Archivio
-          </p>
-          <h2 className="mt-2 text-xl font-black text-slate-950">
-            Storico ordini
-          </h2>
-          <p className="mt-2 text-sm font-bold text-slate-600">
-            Consulta gli ordini già inviati.
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => vai("/documenti")}
-          className={`rounded-3xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
-            documentiNonLetti > 0
-              ? "border-red-200 bg-red-50 hover:border-red-300"
-              : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                Documenti
-              </p>
-              <h2 className="mt-2 text-xl font-black text-slate-950">
-                Documenti locale
-              </h2>
-            </div>
-
-            {documentiNonLetti > 0 && (
-              <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-black text-white">
-                {documentiNonLetti} nuovi
-              </span>
-            )}
-          </div>
-
-          <p className="mt-2 text-sm font-bold text-slate-600">
-            {documentiNonLetti > 0
-              ? `Hai ${documentiNonLetti} documenti da leggere.`
-              : "Nessun nuovo documento. Puoi consultare l'archivio completo."}
-          </p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => vai("/messaggi")}
-          className="rounded-3xl bg-blue-700 p-5 text-left text-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:bg-blue-800 hover:shadow-xl hover:shadow-blue-500/20"
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-blue-100">
-            Comunicazioni
-          </p>
-          <h2 className="mt-2 text-xl font-black">
-            Messaggi con admin
-          </h2>
-          <p className="mt-2 text-sm font-bold text-blue-100">
-            Scrivi segnalazioni, richieste o comunicazioni
-            all&apos;amministrazione.
-          </p>
-        </button>
-      </section>
     </LocaleShell>
   )
 }

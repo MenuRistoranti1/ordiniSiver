@@ -555,15 +555,15 @@ export default function StoricoGiacenze() {
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-lg bg-red-100 px-3 py-1 text-xs font-black text-red-700">
+                        <span className="rounded-lg bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
                           Sotto: {riepilogo.sotto}
                         </span>
 
-                        <span className="rounded-lg bg-green-100 px-3 py-1 text-xs font-black text-green-700">
+                        <span className="rounded-lg bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
                           Corretti: {riepilogo.corretto}
                         </span>
 
-                        <span className="rounded-lg bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                        <span className="rounded-lg bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
                           Sopra: {riepilogo.sopra}
                         </span>
                       </div>
@@ -573,7 +573,7 @@ export default function StoricoGiacenze() {
                       {isAdmin && (
                         <button
                           onClick={() => apriModifica(gruppo)}
-                          className="h-12 rounded-xl bg-amber-100 text-sm font-black text-amber-800"
+                          className="h-12 rounded-xl bg-amber-100 text-sm font-bold text-amber-800"
                         >
                           Modifica
                         </button>
@@ -585,7 +585,7 @@ export default function StoricoGiacenze() {
                             gruppoAperto === gruppo.id ? null : gruppo.id,
                           )
                         }
-                        className="h-12 rounded-xl bg-slate-950 text-sm font-black text-white"
+                        className="h-12 rounded-xl bg-slate-950 text-sm font-bold text-white"
                       >
                         {gruppoAperto === gruppo.id ? "Chiudi" : "Apri"}
                       </button>
@@ -610,11 +610,11 @@ export default function StoricoGiacenze() {
                             </h4>
 
                             <div className="mt-3 flex flex-wrap gap-2">
-                              <span className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-black text-blue-700">
+                              <span className="rounded-lg bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
                                 Quantità: {item.quantita}
                               </span>
 
-                              <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                              <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                                 Min/Max:{" "}
                                 {soglia
                                   ? `${soglia.min_stock}/${soglia.max_stock}`
@@ -622,7 +622,7 @@ export default function StoricoGiacenze() {
                               </span>
 
                               <span
-                                className={`rounded-lg px-3 py-1 text-xs font-black ${classeStato(
+                                className={`rounded-lg px-3 py-1 text-xs font-semibold ${classeStato(
                                   stato,
                                 )}`}
                               >
@@ -658,7 +658,7 @@ export default function StoricoGiacenze() {
                           <button
                             onClick={() => salvaModifiche(gruppo)}
                             disabled={isSaving}
-                            className="h-12 rounded-xl bg-green-600 text-sm font-black text-white disabled:bg-slate-400"
+                            className="h-12 rounded-xl bg-green-600 text-sm font-bold text-white disabled:bg-slate-400"
                           >
                             {isSaving ? "Salvataggio..." : "Salva modifiche"}
                           </button>
@@ -666,7 +666,7 @@ export default function StoricoGiacenze() {
                           <button
                             onClick={() => setModificaAperta(null)}
                             disabled={isSaving}
-                            className="h-12 rounded-xl bg-slate-500 text-sm font-black text-white disabled:bg-slate-400"
+                            className="h-12 rounded-xl bg-slate-500 text-sm font-bold text-white disabled:bg-slate-400"
                           >
                             Annulla
                           </button>

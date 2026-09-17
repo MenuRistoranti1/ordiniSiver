@@ -40,7 +40,7 @@ export function DashboardStatus({
           <button
             type="button"
             onClick={onAction}
-            className="rounded-2xl bg-amber-600 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-700"
+            className="rounded-2xl bg-amber-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-amber-700"
           >
             {actionLabel}
           </button>

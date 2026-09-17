@@ -171,7 +171,7 @@ export function LocaleMobileHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 mb-4 rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 shadow-sm backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-40 mb-4 rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] shadow-sm backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-base font-black tracking-tight text-slate-950">
@@ -193,7 +193,7 @@ export function LocaleMobileHeader({
             <Grid3X3 className="h-5 w-5" />
 
             {notificheTotali > 0 && (
-              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
+              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
                 {notificheTotali}
               </span>
             )}
@@ -233,7 +233,7 @@ export function LocaleMobileHeader({
 
             {localiDisponibili.length > 1 && (
               <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-blue-700">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
                   Cambia locale rapido
                 </p>
 
@@ -241,7 +241,7 @@ export function LocaleMobileHeader({
                   <button
                     type="button"
                     onClick={() => setSelectorAperto((value) => !value)}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-950 px-3 py-3 text-left text-sm font-black text-white"
+                    className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-950 px-3 py-3 text-left text-sm font-bold text-white"
                     aria-expanded={selectorAperto}
                   >
                     <span className="truncate">
@@ -258,7 +258,7 @@ export function LocaleMobileHeader({
                           type="button"
                           key={`mobile-header-${locale.restaurant_id}`}
                           onClick={() => cambiaLocale(locale)}
-                          className={`w-full px-4 py-3 text-left text-sm font-black hover:bg-blue-50 ${
+                          className={`w-full px-4 py-3 text-left text-sm font-bold hover:bg-blue-50 ${
                             String(locale.restaurant_id) === String(localeId)
                               ? "bg-blue-600 text-white hover:bg-blue-600"
                               : ""
@@ -292,12 +292,12 @@ export function LocaleMobileHeader({
                   >
                     <Icon className="h-6 w-6" />
 
-                    <span className="text-[11px] font-black leading-tight">
+                    <span className="text-[11px] font-semibold leading-tight">
                       {item.label}
                     </span>
 
                     {badge > 0 && (
-                      <span className="absolute right-2 top-2 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-black text-white">
+                      <span className="absolute right-2 top-2 min-w-5 rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
                         {badge}
                       </span>
                     )}
@@ -309,7 +309,7 @@ export function LocaleMobileHeader({
             <button
               type="button"
               onClick={tornaSceltaLocale}
-              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-black text-white"
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-bold text-white"
             >
               Cambia locale
             </button>
@@ -317,7 +317,7 @@ export function LocaleMobileHeader({
             <button
               type="button"
               onClick={esci}
-              className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-black text-white"
+              className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-500 text-sm font-bold text-white"
             >
               <LogOut className="h-4 w-4" />
               Logout

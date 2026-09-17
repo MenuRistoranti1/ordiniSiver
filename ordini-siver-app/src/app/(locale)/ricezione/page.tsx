@@ -47,14 +47,14 @@ export default function Ricezione() {
   const daRegistrare = righe.filter((riga) => riga.inArrivo > 0).length
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 pb-32 pt-4 sm:px-5 lg:px-8">
+    <main className="min-h-screen bg-slate-100 px-3 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4 sm:px-5 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-4">
         <LocaleMobileHeader />
 
         <header className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-600">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
                 Ricezione merce
               </p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">
@@ -69,7 +69,7 @@ export default function Ricezione() {
               type="button"
               onClick={() => void ricarica()}
               disabled={loading}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-sm font-black text-white transition-all hover:bg-blue-700 disabled:bg-slate-400"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-sm font-bold text-white transition-all hover:bg-blue-700 disabled:bg-slate-400"
             >
               <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
               Aggiorna
@@ -79,7 +79,7 @@ export default function Ricezione() {
 
         {documenti.length > 0 && (
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
               Documenti del fornitore
             </p>
 
@@ -91,7 +91,7 @@ export default function Ricezione() {
                 >
                   <FileText className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
+                    <p className="truncate text-sm font-bold text-slate-950">
                       {documento.numeroDocumento || documento.fileName}
                     </p>
                     <p className="text-xs font-bold text-slate-500">
@@ -122,7 +122,7 @@ export default function Ricezione() {
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           {loading ? (
-            <div className="p-8 text-center text-sm font-black text-slate-500">
+            <div className="p-8 text-center text-sm font-bold text-slate-500">
               Caricamento ricezione...
             </div>
           ) : righe.length === 0 ? (
@@ -134,7 +134,7 @@ export default function Ricezione() {
             </div>
           ) : (
             <>
-              <div className="hidden bg-slate-950 text-[11px] font-black uppercase tracking-wide text-white md:grid md:grid-cols-[1.5fr_110px_130px_150px_150px_130px]">
+              <div className="hidden bg-slate-950 text-[11px] font-semibold uppercase tracking-wide text-white md:grid md:grid-cols-[1.5fr_110px_130px_150px_150px_130px]">
                 <div className="px-4 py-3">Prodotto</div>
                 <div className="px-4 py-3 text-center">Ordine</div>
                 <div className="px-4 py-3 text-center">Ordinati</div>
@@ -151,15 +151,15 @@ export default function Ricezione() {
                   }`}
                 >
                   <div className="min-w-0 md:px-4 md:py-3">
-                    <p className="text-xs font-black text-slate-500">
+                    <p className="text-xs font-semibold text-slate-500">
                       {riga.supplierCode || "senza codice"}
                     </p>
-                    <h3 className="truncate text-sm font-black text-slate-950">
+                    <h3 className="truncate text-sm font-bold text-slate-950">
                       {riga.nomeProdotto}
                     </h3>
 
                     {riga.settimaneDiAttesa >= 2 && (
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-black uppercase text-amber-700">
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
                         <Clock className="h-3 w-3" />
                         in attesa da {riga.settimaneDiAttesa} settimane
                       </span>
@@ -170,7 +170,7 @@ export default function Ricezione() {
                     {dataOrdine(riga)}
                   </div>
 
-                  <div className="text-sm font-black text-slate-700 md:px-4 md:py-3 md:text-center">
+                  <div className="text-sm font-bold text-slate-700 md:px-4 md:py-3 md:text-center">
                     <span className="md:hidden">Ordinati: </span>
                     {riga.quantitaOrdinata}
                   </div>
@@ -197,7 +197,7 @@ export default function Ricezione() {
                     />
 
                     {riga.propostaDaDocumenti > 0 && (
-                      <p className="mt-1 text-center text-[10px] font-black uppercase text-blue-600">
+                      <p className="mt-1 text-center text-[10px] font-semibold uppercase text-blue-600">
                         da fattura
                       </p>
                     )}
@@ -208,7 +208,7 @@ export default function Ricezione() {
                       type="button"
                       onClick={() => void confermaRiga(riga)}
                       disabled={inSalvataggio !== null || riga.inArrivo <= 0}
-                      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 md:w-auto"
+                      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 md:w-auto"
                     >
                       {inSalvataggio === riga.ordineId ? (
                         "..."
@@ -231,7 +231,7 @@ export default function Ricezione() {
             <div className="mb-3 flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
               <div>
-                <p className="text-sm font-black text-amber-900">
+                <p className="text-sm font-bold text-amber-900">
                   Merce arrivata senza essere stata ordinata
                 </p>
                 <p className="text-xs font-bold text-amber-800">
@@ -245,7 +245,7 @@ export default function Ricezione() {
               type="button"
               onClick={() => void segnalaAdmin()}
               disabled={inSalvataggio !== null || segnalazioneInviata}
-              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-black text-white transition hover:bg-amber-700 disabled:bg-amber-300 sm:w-auto"
+              className="mb-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-bold text-white transition hover:bg-amber-700 disabled:bg-amber-300 sm:w-auto"
             >
               <Send className="h-4 w-4" />
               {segnalazioneInviata
@@ -261,10 +261,10 @@ export default function Ricezione() {
                   key={riga.documentRowId}
                   className="rounded-2xl border border-amber-200 bg-white p-3"
                 >
-                  <p className="text-xs font-black text-slate-500">
+                  <p className="text-xs font-semibold text-slate-500">
                     {riga.supplierCode || "senza codice"} · {riga.tipoDocumento}
                   </p>
-                  <p className="text-sm font-black text-slate-950">
+                  <p className="text-sm font-bold text-slate-950">
                     {riga.nomeProdotto}
                   </p>
                   <p className="text-xs font-bold text-slate-500">
@@ -277,10 +277,10 @@ export default function Ricezione() {
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 p-3 text-white shadow-2xl backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-white shadow-2xl backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[11px] font-black uppercase text-slate-400">
+            <p className="text-[11px] font-semibold uppercase text-slate-400">
               Righe da registrare
             </p>
             <p className="text-xl font-black">
@@ -338,7 +338,7 @@ function Riquadro({
 }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </p>
       <p

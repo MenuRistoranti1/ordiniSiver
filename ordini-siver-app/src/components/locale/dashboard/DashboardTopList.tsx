@@ -42,7 +42,7 @@ export function DashboardTopList({
         </div>
 
         {danger && items.length > 0 && (
-          <span className="animate-pulse rounded-full bg-red-700 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+          <span className="animate-pulse rounded-full bg-red-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
             Alert
           </span>
         )}
@@ -64,7 +64,7 @@ export function DashboardTopList({
               }`}
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-950">
+                <p className="truncate text-sm font-bold text-slate-950">
                   #{index + 1} — {item.nome}
                 </p>
 
