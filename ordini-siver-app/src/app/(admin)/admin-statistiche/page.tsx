@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 type Ordine = any
 type Product = any
@@ -63,10 +64,13 @@ export default function AdminStatistiche() {
 
     try {
       const [ordiniRes, productsRes, localiRes] = await Promise.all([
-        supabase
-          .from("ordini")
-          .select("*")
-          .order("created_at", { ascending: false }),
+        leggiTutte((da, a) =>
+          supabase
+            .from("ordini")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(da, a),
+        ).then((data) => ({ data, error: null })),
         supabase.from("products").select("*"),
         supabase.from("restaurants").select("id, name").order("name"),
       ])

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Menu, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 export default function AdminEstrazioni() {
   const [locali, setLocali] = useState<any[]>([])
@@ -36,11 +37,13 @@ export default function AdminEstrazioni() {
       .select("*")
       .order("name")
 
-    const { data: ordiniData } = await supabase.from("ordini").select("*")
+    const ordiniData = await leggiTutte((da, a) =>
+      supabase.from("ordini").select("*").range(da, a),
+    )
 
-    const { data: giacenzeData } = await supabase
-      .from("giacenze_settimana")
-      .select("*")
+    const giacenzeData = await leggiTutte((da, a) =>
+      supabase.from("giacenze_settimana").select("*").range(da, a),
+    )
 
     setLocali(localiData || [])
     setProdotti(prodottiData || [])

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 export default function AdminStoricoConsegne() {
   const [consegne, setConsegne] = useState<any[]>([])
@@ -27,10 +28,14 @@ export default function AdminStoricoConsegne() {
 
     setLocali(localiDb || [])
 
-    const { data, error } = await supabase
-      .from("ordini")
-      .select("*")
-      .order("created_at", { ascending: false })
+    const data = await leggiTutte((da, a) =>
+      supabase
+        .from("ordini")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(da, a),
+    )
+    const error = null
 
     if (error) {
       console.log(error)

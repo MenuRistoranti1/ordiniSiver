@@ -20,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 import { settimanaKeyCorrente } from "@/lib/settimana"
 
 type AlertItem = {
@@ -121,10 +122,13 @@ export default function AdminAlert() {
           .select("*")
           .eq("settimana_key", settimanaKey),
         supabase.from("ordini").select("*").eq("settimana_key", settimanaKey),
-        supabase
-          .from("ordini")
-          .select("*")
-          .order("created_at", { ascending: false }),
+        leggiTutte((da, a) =>
+          supabase
+            .from("ordini")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(da, a),
+        ).then((data) => ({ data, error: null })),
         supabase
           .from("alert_log")
           .select("*")

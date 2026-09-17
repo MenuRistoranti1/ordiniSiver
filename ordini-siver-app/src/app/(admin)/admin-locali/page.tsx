@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 type LocaleRow = {
   id: string
@@ -80,14 +81,20 @@ export default function AdminLocaliPage() {
           .from("local_users")
           .select("id, nome, cognome, utente, email_interna, locale_id, locale_nome, active, last_login")
           .order("nome", { ascending: true }),
-        supabase
-          .from("ordini")
-          .select("id, locale_id, locale_nome, created_at")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("giacenze_settimana")
-          .select("id, locale_id, locale_nome, created_at")
-          .order("created_at", { ascending: false }),
+        leggiTutte((da, a) =>
+          supabase
+            .from("ordini")
+            .select("id, locale_id, locale_nome, created_at")
+            .order("created_at", { ascending: false })
+            .range(da, a),
+        ).then((data) => ({ data, error: null })),
+        leggiTutte((da, a) =>
+          supabase
+            .from("giacenze_settimana")
+            .select("id, locale_id, locale_nome, created_at")
+            .order("created_at", { ascending: false })
+            .range(da, a),
+        ).then((data) => ({ data, error: null })),
       ])
 
       if (localiRes.error) throw localiRes.error

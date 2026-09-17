@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 type Ordine = {
   id: string
@@ -60,12 +61,15 @@ export default function AdminStoricoOrdini() {
 
     const [{ data: localiDb }, { data: ordiniDb, error }] = await Promise.all([
       supabase.from("restaurants").select("id, name").order("name"),
-      supabase
-        .from("ordini")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .order("locale_nome", { ascending: true })
-        .order("nome_prodotto", { ascending: true }),
+      leggiTutte((da, a) =>
+        supabase
+          .from("ordini")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("locale_nome", { ascending: true })
+          .order("nome_prodotto", { ascending: true })
+          .range(da, a),
+      ).then((data) => ({ data, error: null })),
     ])
 
     if (error) {

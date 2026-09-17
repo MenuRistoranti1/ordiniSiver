@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { ChevronDown, ChevronRight, RefreshCw, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { leggiTutte } from "@/lib/lettura"
 
 type Giacenza = {
   id: string
@@ -27,12 +28,16 @@ export default function AdminGiacenze() {
   async function caricaGiacenze() {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from("giacenze_settimana")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .order("locale_nome", { ascending: true })
-      .order("nome_prodotto", { ascending: true })
+    const data = await leggiTutte((da, a) =>
+      supabase
+        .from("giacenze_settimana")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("locale_nome", { ascending: true })
+        .order("nome_prodotto", { ascending: true })
+        .range(da, a),
+    )
+    const error = null
 
     if (error) {
       console.log(error)
