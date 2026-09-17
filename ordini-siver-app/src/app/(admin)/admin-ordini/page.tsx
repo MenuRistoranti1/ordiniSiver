@@ -23,6 +23,7 @@ type Segnalazione = {
   giacenza: number
   massimo: number
   risultante: number
+  minimo: number
   consigliata: number
   inArrivo: number
 }
@@ -233,6 +234,7 @@ export default function AdminOrdini() {
         giacenza,
         massimo: soglia.max,
         risultante: giacenza + ordinata,
+        minimo: soglia.min,
         consigliata,
         inArrivo,
       })
@@ -349,6 +351,13 @@ export default function AdminOrdini() {
 
   /* Il massimo si scrive solo dove è stato impostato: zero vuol dire "nessun tetto". */
   const limite = (massimo: number) => (massimo > 0 ? `, massimo ${massimo}` : "")
+
+  /*
+    Qui il massimo non è la ragione dell'avviso: dirlo e basta faceva sembrare
+    che ci fosse uno sforamento anche quando la quantità ci sta dentro.
+  */
+  const dentroIlMassimo = (massimo: number) =>
+    massimo > 0 ? `, dentro il massimo di ${massimo}` : ""
 
   const peso = (tipo: Segnalazione["tipo"]) =>
     tipo === "oltre_massimo" ? 0 : tipo === "gia_in_arrivo" ? 1 : 2
@@ -609,8 +618,8 @@ export default function AdminOrdini() {
                           `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati: arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
                         {riga.tipo === "piu_del_consigliato" &&
                           (riga.consigliata > 0
-                            ? `ordina ${riga.ordinata}, il consiglio era ${riga.consigliata}: ha ${riga.giacenza} e arriverebbe a ${riga.risultante}${limite(riga.massimo)}`
-                            : `ordina ${riga.ordinata}, il sistema non ne proponeva: ha ${riga.giacenza} e arriverebbe a ${riga.risultante}${limite(riga.massimo)}`)}
+                            ? `ordina ${riga.ordinata} invece dei ${riga.consigliata} consigliati. Arriverebbe a ${riga.risultante}${dentroIlMassimo(riga.massimo)}`
+                            : `ordina ${riga.ordinata} ma non ne servivano: ne ha ${riga.giacenza}${riga.minimo > 0 ? `, sopra il minimo di ${riga.minimo}` : ""}. Arriverebbe a ${riga.risultante}${dentroIlMassimo(riga.massimo)}`)}
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">

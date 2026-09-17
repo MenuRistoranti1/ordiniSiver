@@ -1269,8 +1269,8 @@ export default function NuovoOrdine() {
                         !righeGuardate.includes(prodotto.id) && (
                           <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                             {prodotto.consigliato > 0
-                              ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}: hai ${prodotto.giacenza} e arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, con un massimo di ${prodotto.max_stock}` : ""}`
-                              : `Ne ordini ${qta}: il sistema non ne proponeva. Hai ${prodotto.giacenza} e arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, con un massimo di ${prodotto.max_stock}` : ""}`}
+                              ? `Ne ordini ${qta} invece dei ${prodotto.consigliato} consigliati: arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, dentro il massimo di ${prodotto.max_stock}` : ""}`
+                              : `Ne ordini ${qta} ma non ne servivano: ne hai ${prodotto.giacenza}${prodotto.min_stock > 0 ? `, sopra il minimo di ${prodotto.min_stock}` : ""}. Arriveresti a ${prodotto.giacenza + Number(qta || 0)}${prodotto.max_stock > 0 ? `, dentro il massimo di ${prodotto.max_stock}` : ""}`}
                             <button
                               type="button"
                               onClick={() =>
