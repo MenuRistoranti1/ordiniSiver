@@ -58,6 +58,12 @@ export default function NuovoOrdine() {
 
   const [prodotti, setProdotti] = useState<ProdottoOrdine[]>([])
   const [quantita, setQuantita] = useState<Record<string, string>>({})
+  /*
+    Righe segnalate che il responsabile ha gia' guardato: la segnalazione
+    sparisce, la quantita' resta quella che ha scelto. Vale per la sessione,
+    come nella pagina dell'amministrazione.
+  */
+  const [righeGuardate, setRigheGuardate] = useState<string[]>([])
   const [righeLibere, setRigheLibere] = useState<RigaLibera[]>([
     { nome_prodotto: "", misura: "", quantita: "" },
   ])
@@ -452,18 +458,33 @@ export default function NuovoOrdine() {
   }
 
   /*
-    Righe in cui si chiede piu' di quanto il sistema propone, compreso il caso
-    in cui non proponeva nulla. Non impedisce l'invio: e' chi sta in sala a
-    sapere se serve davvero, ma deve accorgersene prima di mandare l'ordine.
+    Righe da guardare prima di inviare: merce gia' ordinata e non ancora
+    arrivata, oppure quantita' superiore a quella proposta. Non impedisce
+    l'invio, e' chi sta in sala a sapere se serve davvero, ma deve
+    accorgersene prima e non dopo.
   */
-  const oltreIlConsiglio = useMemo(() => {
+  const daControllare = useMemo(() => {
     return prodotti
-      .map((prodotto) => ({
-        prodotto,
-        richiesta: Number(quantita[prodotto.id] || 0),
-      }))
-      .filter((riga) => riga.richiesta > riga.prodotto.consigliato)
-  }, [prodotti, quantita])
+      .map((prodotto) => {
+        const richiesta = Number(quantita[prodotto.id] || 0)
+
+        if (richiesta <= 0) return null
+
+        if (prodotto.in_arrivo > 0) {
+          return { prodotto, richiesta, motivo: "in_arrivo" as const }
+        }
+
+        if (richiesta > prodotto.consigliato) {
+          return { prodotto, richiesta, motivo: "sopra_consiglio" as const }
+        }
+
+        return null
+      })
+      .filter(
+        (riga): riga is NonNullable<typeof riga> =>
+          riga !== null && !righeGuardate.includes(riga.prodotto.id),
+      )
+  }, [prodotti, quantita, righeGuardate])
 
   function statoSoglia(prodotto: ProdottoOrdine) {
     const qta = Number(prodotto.giacenza || 0)
@@ -760,18 +781,20 @@ export default function NuovoOrdine() {
       return
     }
 
-    const avvisi = oltreIlConsiglio
+    const avvisi = daControllare
       .map((riga) =>
-        riga.prodotto.consigliato > 0
-          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}`
-          : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva`,
+        riga.motivo === "in_arrivo"
+          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, ma ${riga.prodotto.in_arrivo} sono già in arrivo`
+          : riga.prodotto.consigliato > 0
+            ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}`
+            : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva`,
       )
       .join("\n")
 
     const conferma = window.confirm(
       `Stai inviando ${righeOrdine.length} prodotti per una quantità totale di ${quantitaTotaleOrdine}.` +
         (avvisi
-          ? `\n\nSopra il consigliato:\n${avvisi}\n\nPuoi inviare lo stesso.`
+          ? `\n\nDa controllare prima di inviare:\n${avvisi}\n\nPuoi inviare lo stesso.`
           : "") +
         `\n\nConfermi l'invio dell'ordine?`
     )
@@ -1210,13 +1233,43 @@ export default function NuovoOrdine() {
                         </button>
                       </div>
 
-                      {Number(qta || 0) > prodotto.consigliato && (
-                        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          {prodotto.consigliato > 0
-                            ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}`
-                            : `Ne ordini ${qta}: il sistema non ne proponeva`}
+                      {Number(qta || 0) > 0 &&
+                        prodotto.in_arrivo > 0 &&
+                        !righeGuardate.includes(prodotto.id) && (
+                        <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                          Attenzione: {prodotto.in_arrivo} pezzi sono già stati
+                          ordinati e non ancora consegnati. Ne stai ordinando{" "}
+                          {qta}: conferma o correggi prima di inviare.
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRigheGuardate((attuali) => [...attuali, prodotto.id])
+                            }
+                            className="ml-2 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-900"
+                          >
+                            Va bene così
+                          </button>
                         </p>
                       )}
+
+                      {Number(qta || 0) > prodotto.consigliato &&
+                        prodotto.in_arrivo === 0 &&
+                        !righeGuardate.includes(prodotto.id) && (
+                          <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                            {prodotto.consigliato > 0
+                              ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}`
+                              : `Ne ordini ${qta}: il sistema non ne proponeva`}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRigheGuardate((attuali) => [...attuali, prodotto.id])
+                              }
+                              className="ml-2 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-bold text-amber-900"
+                            >
+                              Va bene così
+                            </button>
+                          </p>
+                        )}
                     </div>
                   )
                 })}
