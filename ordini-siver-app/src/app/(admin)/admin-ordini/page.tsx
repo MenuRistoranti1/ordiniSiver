@@ -54,17 +54,14 @@ export default function AdminOrdini() {
       .select("id, name")
       .order("name")
 
-    const { data: ordiniDb, error } = await supabase
-      .from("ordini")
-      .select("*")
-      .order("locale_nome", { ascending: true })
+    const ordiniDb = await leggiTutto("ordini", "*", "locale_nome")
 
     /*
       Senza il filtro sulla settimana il testo da mandare al fornitore
       conteneva tutti gli ordini mai fatti.
     */
     const settimane = Array.from(
-      new Set((ordiniDb || []).map((o) => String(o.settimana_key || ""))),
+      new Set(ordiniDb.map((o: any) => String(o.settimana_key || ""))),
     )
       .filter(Boolean)
       .sort()
@@ -72,16 +69,9 @@ export default function AdminOrdini() {
 
     setSettimaneDisponibili(settimane)
 
-    if (error) {
-      console.log(error)
-      alert("Errore caricamento ordini")
-      setLoading(false)
-      return
-    }
-
     setLocali(localiDb || [])
 
-    const ordiniFormattati = (ordiniDb || []).map((ordine) => ({
+    const ordiniFormattati = ordiniDb.map((ordine: any) => ({
       ...ordine,
       codice: codici[ordine.nome_prodotto] || "",
     }))
@@ -99,28 +89,33 @@ export default function AdminOrdini() {
     segnalata.
   */
   async function calcolaSopraSoglia(listaOrdini: any[]) {
-    const [{ data: prodottiDb }, { data: impostazioni }, { data: giacenze }] =
-      await Promise.all([
-        supabase.from("products").select("id, name"),
-        supabase
-          .from("restaurant_product_settings")
-          .select("restaurant_id, product_id, prodotto_id, max_stock, active")
-          .eq("active", true),
-        supabase
-          .from("giacenze_settimana")
-          .select("locale_id, nome_prodotto, quantita, settimana_key"),
-      ])
+    /*
+      Le letture vanno paginate: il database ne restituisce al massimo mille
+      per volta, e le giacenze sono gia' molte di piu'. Senza paginazione le
+      righe mancanti risultavano con giacenza zero e nessuna segnalazione.
+    */
+    const [prodottiDb, impostazioni, giacenze] = await Promise.all([
+      leggiTutto("products", "id, name"),
+      leggiTutto(
+        "restaurant_product_settings",
+        "restaurant_id, product_id, prodotto_id, max_stock, active",
+      ),
+      leggiTutto(
+        "giacenze_settimana",
+        "locale_id, nome_prodotto, quantita, settimana_key",
+      ),
+    ])
 
     const chiave = (valore: unknown) =>
       String(valore || "").trim().toUpperCase()
 
     const idPerNome = new Map(
-      (prodottiDb || []).map((p: any) => [chiave(p.name), String(p.id)]),
+      prodottiDb.map((p: any) => [chiave(p.name), String(p.id)]),
     )
 
     const massimi = new Map<string, number>()
 
-    for (const riga of impostazioni || []) {
+    for (const riga of impostazioni.filter((riga: any) => riga.active)) {
       const idProdotto = String(riga.prodotto_id || riga.product_id || "")
       if (!idProdotto) continue
       massimi.set(`${riga.restaurant_id}|${idProdotto}`, Number(riga.max_stock || 0))
@@ -128,7 +123,7 @@ export default function AdminOrdini() {
 
     const giacenzePerRiga = new Map<string, number>()
 
-    for (const riga of giacenze || []) {
+    for (const riga of giacenze) {
       giacenzePerRiga.set(
         `${riga.locale_id}|${chiave(riga.nome_prodotto)}|${riga.settimana_key}`,
         Number(riga.quantita || 0),
@@ -167,6 +162,30 @@ export default function AdminOrdini() {
     }
 
     setSopraSoglia(segnalazioni)
+  }
+
+  async function leggiTutto(tabella: string, colonne: string, ordina?: string) {
+    const righe: any[] = []
+
+    for (let da = 0; ; da += 1000) {
+      const query = supabase.from(tabella).select(colonne).range(da, da + 999)
+
+      const { data, error } = await (ordina
+        ? query.order(ordina, { ascending: true })
+        : query)
+
+      if (error) {
+        console.log(`Errore lettura ${tabella}:`, error)
+        break
+      }
+
+      const blocco = (data || []) as any[]
+      righe.push(...blocco)
+
+      if (blocco.length < 1000) break
+    }
+
+    return righe
   }
 
   function generaTesto(listaOrdini: any[]) {
