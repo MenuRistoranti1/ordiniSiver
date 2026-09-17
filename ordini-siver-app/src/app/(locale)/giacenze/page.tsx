@@ -6,6 +6,9 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Home,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Circle,
   Minus,
   Package,
   Plus,
@@ -60,6 +63,14 @@ export default function Giacenze() {
     salutoOrario,
     periodoSettimana,
   } = useLocaleInventory()
+
+  /* Il colore non basta: chi confonde rosso e verde deve poter riconoscere lo stato. */
+  function iconaStato(stato: InventoryStatus) {
+    if (stato === "Sotto soglia") return <ArrowDownCircle className="h-3.5 w-3.5" />
+    if (stato === "Sopra soglia") return <ArrowUpCircle className="h-3.5 w-3.5" />
+    if (stato === "Corretto") return <CheckCircle2 className="h-3.5 w-3.5" />
+    return <Circle className="h-3.5 w-3.5" />
+  }
 
   function classeStato(stato: InventoryStatus) {
     if (stato === "Sotto soglia") return "border-red-200 bg-red-50 text-red-700"
@@ -258,7 +269,7 @@ export default function Giacenze() {
             value={quantitaTotaleCompilata}
             note="pezzi complessivi"
             icon={Warehouse}
-            tone="bg-purple-100 text-purple-700"
+            tone="bg-slate-100 text-slate-700"
           />
           <KpiCard
             label="Sotto soglia"
@@ -378,7 +389,8 @@ export default function Giacenze() {
                       </div>
 
                       <div className="px-4 py-3 text-center">
-                        <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
+                          {iconaStato(stato)}
                           {stato}
                         </span>
                       </div>
@@ -412,7 +424,8 @@ export default function Giacenze() {
                             <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
                               Range: {prodotto.min_stock}/{prodotto.max_stock}
                             </span>
-                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${classeStato(stato)}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
+                              {iconaStato(stato)}
                               {stato}
                             </span>
                           </div>

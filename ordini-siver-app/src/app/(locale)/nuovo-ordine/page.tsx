@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
+  ArrowDownCircle,
+  ArrowUpCircle,
   CheckCircle2,
+  Truck,
   Home,
   Minus,
   PackagePlus,
@@ -459,6 +462,35 @@ export default function NuovoOrdine() {
     return "Corretto"
   }
 
+  /*
+    Perché il sistema propone quella quantità. Scritto in parole: un numero
+    senza spiegazione non si contesta, e chi ordina deve poter dire "no, qui
+    sbagli" sapendo su cosa.
+  */
+  function spiegazioneConsiglio(prodotto: ProdottoOrdine) {
+    const parti = [`hai ${prodotto.giacenza}`]
+
+    if (Number(prodotto.min_stock) > 0) parti.push(`minimo ${prodotto.min_stock}`)
+    if (prodotto.in_arrivo > 0) parti.push(`${prodotto.in_arrivo} già in arrivo`)
+
+    if (prodotto.consigliato > 0) {
+      const target = targetProdotto(prodotto)
+      return `${parti.join(", ")}: ne ordino ${prodotto.consigliato} per arrivare a ${target}`
+    }
+
+    if (prodotto.in_arrivo > 0) {
+      return `${parti.join(", ")}: la merce in arrivo copre il fabbisogno`
+    }
+
+    return `${parti.join(", ")}: scorta sufficiente`
+  }
+
+  function iconaStato(stato: string) {
+    if (stato === "Sotto soglia") return <ArrowDownCircle className="h-3.5 w-3.5" />
+    if (stato === "Sopra soglia") return <ArrowUpCircle className="h-3.5 w-3.5" />
+    return <CheckCircle2 className="h-3.5 w-3.5" />
+  }
+
   function classeStato(stato: string) {
     if (stato === "Sotto soglia") return "border-red-200 bg-red-50 text-red-700"
     if (stato === "Sopra soglia") return "border-orange-200 bg-orange-50 text-orange-700"
@@ -792,9 +824,9 @@ export default function NuovoOrdine() {
                 <p className="text-[11px] font-semibold uppercase text-slate-500">Pezzi</p>
                 <p className="mt-1 text-2xl font-black text-slate-950">{quantitaTotaleOrdine}</p>
               </div>
-              <div className="col-span-2 rounded-2xl bg-emerald-50 p-3 sm:col-span-1">
-                <p className="text-[11px] font-semibold uppercase text-emerald-700">Consigliati</p>
-                <p className="mt-1 text-2xl font-black text-emerald-800">{consigliatiDisponibili}</p>
+              <div className="col-span-2 rounded-2xl bg-green-50 p-3 sm:col-span-1">
+                <p className="text-[11px] font-semibold uppercase text-green-700">Consigliati</p>
+                <p className="mt-1 text-2xl font-black text-green-800">{consigliatiDisponibili}</p>
               </div>
             </div>
           </div>
@@ -1035,7 +1067,7 @@ export default function NuovoOrdine() {
 
                       <div className="px-4 py-4">
                         <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
-                          {stato === "Corretto" ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                          {iconaStato(stato)}
                           {stato}
                         </span>
                       </div>
@@ -1083,32 +1115,43 @@ export default function NuovoOrdine() {
 
                   return (
                     <div key={`${prodotto.id}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-semibold text-slate-500">{prodotto.supplier_code || "-"}</p>
-                          <h3 className="mt-1 text-sm font-bold leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold text-slate-500">{prodotto.supplier_code || "-"}</p>
+                        <h3 className="mt-1 text-sm font-bold leading-tight text-slate-950">{prodotto.nome_prodotto}</h3>
 
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            <div className="rounded-xl bg-slate-50 p-2">
-                              <p className="text-[10px] font-semibold uppercase text-slate-500">Attuale</p>
-                              <p className="text-lg font-black text-slate-950">{prodotto.giacenza}</p>
-                            </div>
-                            <div className="rounded-xl bg-slate-50 p-2">
-                              <p className="text-[10px] font-semibold uppercase text-slate-500">Target</p>
-                              <p className="text-lg font-black text-slate-950">{targetProdotto(prodotto)}</p>
-                            </div>
-                          </div>
+                        {/*
+                          Il numero che conta è uno solo: quanto ordinare. Gli altri
+                          servono a spiegarlo, e stanno nella riga sotto, in parole.
+                        */}
+                        <div className="mt-2 flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-slate-950">
+                            {prodotto.consigliato > 0 ? prodotto.consigliato : "—"}
+                          </span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {prodotto.consigliato > 0 ? "consigliati" : "niente da ordinare"}
+                          </span>
+                        </div>
 
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">Media {prodotto.media_storica || 0}</span>
-                            {prodotto.in_arrivo > 0 && (
-                              <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
-                                in arrivo {prodotto.in_arrivo}
-                              </span>
-                            )}
-                            <span className="rounded-lg bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">Min/Max {prodotto.min_stock}/{prodotto.max_stock}</span>
-                            <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold uppercase ${classeStato(stato)}`}>{stato}</span>
-                          </div>
+                        <p className="mt-1 text-xs font-semibold leading-snug text-slate-600">
+                          {spiegazioneConsiglio(prodotto)}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold uppercase ${classeStato(stato)}`}>
+                            {iconaStato(stato)}
+                            {stato}
+                          </span>
+
+                          {prodotto.in_arrivo > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                              <Truck className="h-3.5 w-3.5" />
+                              {prodotto.in_arrivo} in arrivo
+                            </span>
+                          )}
+
+                          <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                            min {prodotto.min_stock} · max {prodotto.max_stock}
+                          </span>
                         </div>
                       </div>
 

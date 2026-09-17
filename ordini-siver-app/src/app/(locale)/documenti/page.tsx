@@ -211,7 +211,7 @@ function formatStatus(status: string) {
 
 function statusClass(status: string) {
   if (status === "processed") {
-    return "rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700"
+    return "rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700"
   }
 
   if (status === "error") {
