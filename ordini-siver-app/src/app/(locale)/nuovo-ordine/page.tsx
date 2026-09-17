@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { prossimaSettimana, settimanaKeyCorrente } from "@/lib/settimana"
+import { quantitaConsigliata } from "@/lib/consiglio"
 import { useToast } from "@/components/Toast"
 import { LocaleMobileHeader } from "@/components/LocaleMobileHeader"
 
@@ -380,15 +381,13 @@ export default function NuovoOrdine() {
         const codiceProdotto = String(prodotto?.supplier_code || "").toUpperCase().trim()
         const inArrivo = inArrivoPerCodice.get(codiceProdotto) || 0
 
-        const consigliatoStorico = qtaGiacenza < mediaStorica ? Math.ceil(mediaStorica - qtaGiacenza) : 0
-        const consigliatoSoglia = max > 0 && qtaGiacenza < min ? max - qtaGiacenza : 0
-
-        // Ciò che sta già arrivando copre parte del fabbisogno: va scalato dal
-        // consiglio, altrimenti si ordina due volte la stessa merce.
-        const consigliato = Math.max(
-          0,
-          Math.max(consigliatoStorico, consigliatoSoglia) - inArrivo,
-        )
+        const consigliato = quantitaConsigliata({
+          giacenza: qtaGiacenza,
+          minStock: min,
+          maxStock: max,
+          mediaStorica,
+          inArrivo,
+        })
 
         return {
           id: String(idProdotto),
@@ -451,6 +450,20 @@ export default function NuovoOrdine() {
     setProdottiExtraAnagrafica(extraPuliti)
     setQuantita(qtaIniziali)
   }
+
+  /*
+    Righe in cui si chiede piu' di quanto il sistema propone, compreso il caso
+    in cui non proponeva nulla. Non impedisce l'invio: e' chi sta in sala a
+    sapere se serve davvero, ma deve accorgersene prima di mandare l'ordine.
+  */
+  const oltreIlConsiglio = useMemo(() => {
+    return prodotti
+      .map((prodotto) => ({
+        prodotto,
+        richiesta: Number(quantita[prodotto.id] || 0),
+      }))
+      .filter((riga) => riga.richiesta > riga.prodotto.consigliato)
+  }, [prodotti, quantita])
 
   function statoSoglia(prodotto: ProdottoOrdine) {
     const qta = Number(prodotto.giacenza || 0)
@@ -747,8 +760,20 @@ export default function NuovoOrdine() {
       return
     }
 
+    const avvisi = oltreIlConsiglio
+      .map((riga) =>
+        riga.prodotto.consigliato > 0
+          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il consiglio era ${riga.prodotto.consigliato}`
+          : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, il sistema non ne proponeva`,
+      )
+      .join("\n")
+
     const conferma = window.confirm(
-      `Stai inviando ${righeOrdine.length} prodotti per una quantità totale di ${quantitaTotaleOrdine}. Confermi l'invio dell'ordine?`
+      `Stai inviando ${righeOrdine.length} prodotti per una quantità totale di ${quantitaTotaleOrdine}.` +
+        (avvisi
+          ? `\n\nSopra il consigliato:\n${avvisi}\n\nPuoi inviare lo stesso.`
+          : "") +
+        `\n\nConfermi l'invio dell'ordine?`
     )
 
     if (!conferma) return
@@ -1184,6 +1209,14 @@ export default function NuovoOrdine() {
                           +
                         </button>
                       </div>
+
+                      {Number(qta || 0) > prodotto.consigliato && (
+                        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                          {prodotto.consigliato > 0
+                            ? `Ne ordini ${qta}, il consiglio era ${prodotto.consigliato}`
+                            : `Ne ordini ${qta}: il sistema non ne proponeva`}
+                        </p>
+                      )}
                     </div>
                   )
                 })}

@@ -4,22 +4,33 @@ import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { settimanaKeyCorrente } from "@/lib/settimana"
+import { motivoSegnalazione, quantitaConsigliata } from "@/lib/consiglio"
+import { leggiTutte } from "@/lib/lettura"
 
 /*
   Riga d'ordine che porterebbe la giacenza oltre il massimo impostato per quel
   locale. Non blocca niente: e' l'amministrazione a decidere se ordinare lo
   stesso, ma deve saperlo prima di mandare l'ordine al fornitore.
 */
-type SopraSoglia = {
+type Segnalazione = {
   chiave: string
   /** Righe d'ordine da correggere: una per locale, prodotto e settimana. */
   ordineIds: string[]
+  tipo: "oltre_massimo" | "piu_del_consigliato" | "gia_in_arrivo"
   locale: string
   prodotto: string
   ordinata: number
   giacenza: number
   massimo: number
   risultante: number
+  consigliata: number
+  inArrivo: number
+}
+
+const TESTO_TIPO: Record<Segnalazione["tipo"], string> = {
+  oltre_massimo: "oltre il massimo",
+  gia_in_arrivo: "già in arrivo",
+  piu_del_consigliato: "più del consigliato",
 }
 
 export default function AdminOrdini() {
@@ -32,7 +43,7 @@ export default function AdminOrdini() {
   const [loading, setLoading] = useState(true)
   const [settimana, setSettimana] = useState(settimanaKeyCorrente())
   const [settimaneDisponibili, setSettimaneDisponibili] = useState<string[]>([])
-  const [sopraSoglia, setSopraSoglia] = useState<Map<string, SopraSoglia>>(new Map())
+  const [sopraSoglia, setSopraSoglia] = useState<Map<string, Segnalazione>>(new Map())
   /*
     Righe oltre il massimo che l'amministrazione ha deciso di mandare cosi'
     come sono. Vale per la sessione: serve a togliere dall'elenco cio' che e'
@@ -64,7 +75,13 @@ export default function AdminOrdini() {
       .select("id, name")
       .order("name")
 
-    const ordiniDb = await leggiTutto("ordini", "*", "locale_nome")
+    const ordiniDb = await leggiTutte<any>((da, a) =>
+      supabase
+        .from("ordini")
+        .select("*")
+        .order("locale_nome", { ascending: true })
+        .range(da, a),
+    )
 
     /*
       Senza il filtro sulla settimana il testo da mandare al fornitore
@@ -88,47 +105,52 @@ export default function AdminOrdini() {
 
     setOrdini(ordiniFormattati)
 
-    await calcolaSopraSoglia(ordiniFormattati)
+    await calcolaSegnalazioni(ordiniFormattati)
 
     setLoading(false)
   }
 
   /*
-    Quanto si arriverebbe ad avere in casa: giacenza dichiarata piu' quantita'
-    ordinata. Se supera il massimo impostato per quel locale, la riga viene
-    segnalata.
+    Le tre cose che l'amministrazione deve sapere prima di mandare l'ordine:
+    la merce in casa supererebbe il massimo, il prodotto e' gia' in arrivo da
+    un ordine precedente, oppure se ne chiede piu' di quanto il sistema
+    proponga. Nessuna blocca niente.
   */
-  async function calcolaSopraSoglia(listaOrdini: any[]) {
-    /*
-      Le letture vanno paginate: il database ne restituisce al massimo mille
-      per volta, e le giacenze sono gia' molte di piu'. Senza paginazione le
-      righe mancanti risultavano con giacenza zero e nessuna segnalazione.
-    */
+  async function calcolaSegnalazioni(listaOrdini: any[]) {
     const [prodottiDb, impostazioni, giacenze] = await Promise.all([
-      leggiTutto("products", "id, name"),
-      leggiTutto(
-        "restaurant_product_settings",
-        "restaurant_id, product_id, prodotto_id, max_stock, active",
+      leggiTutte<any>((da, a) =>
+        supabase.from("products").select("id, name").range(da, a),
       ),
-      leggiTutto(
-        "giacenze_settimana",
-        "locale_id, nome_prodotto, quantita, settimana_key",
+      leggiTutte<any>((da, a) =>
+        supabase
+          .from("restaurant_product_settings")
+          .select("restaurant_id, product_id, prodotto_id, min_stock, max_stock, active")
+          .range(da, a),
+      ),
+      leggiTutte<any>((da, a) =>
+        supabase
+          .from("giacenze_settimana")
+          .select("locale_id, nome_prodotto, quantita, settimana_key")
+          .range(da, a),
       ),
     ])
 
-    const chiave = (valore: unknown) =>
-      String(valore || "").trim().toUpperCase()
+    const chiave = (valore: unknown) => String(valore || "").trim().toUpperCase()
 
-    const idPerNome = new Map(
-      prodottiDb.map((p: any) => [chiave(p.name), String(p.id)]),
+    const idPerNome = new Map<string, string>(
+      prodottiDb.map((p: any) => [chiave(p.name), String(p.id)] as [string, string]),
     )
 
-    const massimi = new Map<string, number>()
+    const soglie = new Map<string, { min: number; max: number }>()
 
     for (const riga of impostazioni.filter((riga: any) => riga.active)) {
       const idProdotto = String(riga.prodotto_id || riga.product_id || "")
       if (!idProdotto) continue
-      massimi.set(`${riga.restaurant_id}|${idProdotto}`, Number(riga.max_stock || 0))
+
+      soglie.set(`${riga.restaurant_id}|${idProdotto}`, {
+        min: Number(riga.min_stock || 0),
+        max: Number(riga.max_stock || 0),
+      })
     }
 
     const giacenzePerRiga = new Map<string, number>()
@@ -140,22 +162,63 @@ export default function AdminOrdini() {
       )
     }
 
-    const segnalazioni = new Map<string, SopraSoglia>()
+    const segnalazioni = new Map<string, Segnalazione>()
 
     for (const ordine of listaOrdini) {
-      const idProdotto = idPerNome.get(chiave(ordine.nome_prodotto))
+      const nome = chiave(ordine.nome_prodotto)
+      const idProdotto = idPerNome.get(nome)
       if (!idProdotto) continue
 
-      const massimo = massimi.get(`${ordine.locale_id}|${idProdotto}`) || 0
-      if (massimo <= 0) continue
+      const soglia = soglie.get(`${ordine.locale_id}|${idProdotto}`)
+      if (!soglia) continue
 
-      const id = `${ordine.locale_id}|${chiave(ordine.nome_prodotto)}|${ordine.settimana_key}`
+      const id = `${ordine.locale_id}|${nome}|${ordine.settimana_key}`
       const giacenza = giacenzePerRiga.get(id) || 0
+
       const ordinata =
         (segnalazioni.get(id)?.ordinata || 0) + Number(ordine.quantita || 0)
-      const risultante = giacenza + ordinata
 
-      if (risultante <= massimo) {
+      /*
+        Merce gia' ordinata e non ancora arrivata, dalle settimane precedenti:
+        e' la stessa che il locale vede come "in arrivo".
+      */
+      const inArrivo = listaOrdini
+        .filter(
+          (altro: any) =>
+            altro.locale_id === ordine.locale_id &&
+            chiave(altro.nome_prodotto) === nome &&
+            String(altro.settimana_key || "") < String(ordine.settimana_key || "") &&
+            altro.stato_consegna !== "annullato",
+        )
+        .reduce(
+          (somma: number, altro: any) =>
+            somma +
+            Math.max(
+              0,
+              Number(altro.quantita || 0) - Number(altro.quantita_consegnata || 0),
+            ),
+          0,
+        )
+
+      const mediaStorica = mediaUltimiOrdini(listaOrdini, ordine, nome, chiave)
+
+      const consigliata = quantitaConsigliata({
+        giacenza,
+        minStock: soglia.min,
+        maxStock: soglia.max,
+        mediaStorica,
+        inArrivo,
+      })
+
+      const tipo = motivoSegnalazione({
+        ordinata,
+        consigliata,
+        giacenza,
+        maxStock: soglia.max,
+        inArrivo,
+      })
+
+      if (!tipo) {
         segnalazioni.delete(id)
         continue
       }
@@ -163,40 +226,48 @@ export default function AdminOrdini() {
       segnalazioni.set(id, {
         chiave: id,
         ordineIds: [...(segnalazioni.get(id)?.ordineIds || []), String(ordine.id)],
+        tipo,
         locale: String(ordine.locale_nome || "Locale"),
         prodotto: String(ordine.nome_prodotto || "Prodotto"),
         ordinata,
         giacenza,
-        massimo,
-        risultante,
+        massimo: soglia.max,
+        risultante: giacenza + ordinata,
+        consigliata,
+        inArrivo,
       })
     }
 
     setSopraSoglia(segnalazioni)
   }
 
-  async function leggiTutto(tabella: string, colonne: string, ordina?: string) {
-    const righe: any[] = []
+  /** Media degli ultimi quattro ordini dello stesso prodotto nello stesso locale. */
+  function mediaUltimiOrdini(
+    listaOrdini: any[],
+    ordine: any,
+    nome: string,
+    chiave: (valore: unknown) => string,
+  ) {
+    const precedenti = listaOrdini
+      .filter(
+        (altro: any) =>
+          altro.locale_id === ordine.locale_id &&
+          chiave(altro.nome_prodotto) === nome &&
+          String(altro.settimana_key || "") < String(ordine.settimana_key || ""),
+      )
+      .sort((a: any, b: any) =>
+        String(b.settimana_key || "").localeCompare(String(a.settimana_key || "")),
+      )
+      .slice(0, 4)
 
-    for (let da = 0; ; da += 1000) {
-      const query = supabase.from(tabella).select(colonne).range(da, da + 999)
+    if (precedenti.length === 0) return 0
 
-      const { data, error } = await (ordina
-        ? query.order(ordina, { ascending: true })
-        : query)
-
-      if (error) {
-        console.log(`Errore lettura ${tabella}:`, error)
-        break
-      }
-
-      const blocco = (data || []) as any[]
-      righe.push(...blocco)
-
-      if (blocco.length < 1000) break
-    }
-
-    return righe
+    return (
+      precedenti.reduce(
+        (somma: number, altro: any) => somma + Number(altro.quantita || 0),
+        0,
+      ) / precedenti.length
+    )
   }
 
   function generaTesto(listaOrdini: any[]) {
@@ -276,6 +347,9 @@ export default function AdminOrdini() {
     generaTesto(ordiniFiltrati)
   }, [ordiniFiltrati])
 
+  const peso = (tipo: Segnalazione["tipo"]) =>
+    tipo === "oltre_massimo" ? 0 : tipo === "gia_in_arrivo" ? 1 : 2
+
   const segnalazioniVisibili = useMemo(() => {
     const idVisibili = new Set(
       ordiniFiltrati.map(
@@ -288,6 +362,7 @@ export default function AdminOrdini() {
       .filter((riga) => idVisibili.has(riga.chiave) && !confermate.includes(riga.chiave))
       .sort(
         (a, b) =>
+          peso(a.tipo) - peso(b.tipo) ||
           b.risultante - b.massimo - (a.risultante - a.massimo) ||
           a.locale.localeCompare(b.locale),
       )
@@ -305,7 +380,7 @@ export default function AdminOrdini() {
     l'amministrazione guarda l'ordine prima di mandarlo, e tornare indietro
     fino alla schermata del locale per cambiare un numero non ha senso.
   */
-  async function salvaQuantita(riga: SopraSoglia) {
+  async function salvaQuantita(riga: Segnalazione) {
     const nuova = Number(correzione[riga.chiave])
 
     if (!Number.isFinite(nuova) || nuova < 0) {
@@ -503,7 +578,7 @@ export default function AdminOrdini() {
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-amber-900">
-                  {segnalazioniVisibili.length} righe portano la giacenza oltre il massimo
+                  {segnalazioniVisibili.length} righe da guardare prima di mandare l&apos;ordine
                 </h3>
                 <p className="mt-0.5 text-xs font-semibold text-amber-800">
                   Non blocca l&apos;ordine: correggi la quantità qui sotto
@@ -516,17 +591,24 @@ export default function AdminOrdini() {
                       key={riga.chiave}
                       className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
                     >
-                      <span className="font-bold text-slate-950">{riga.locale}</span>
-                      {" · "}
-                      {riga.prodotto}
-                      {": ha "}
-                      {riga.giacenza}
-                      {", ordina "}
-                      {riga.ordinata}
-                      {" → arriverebbe a "}
-                      <span className="font-bold text-amber-800">{riga.risultante}</span>
-                      {", massimo "}
-                      {riga.massimo}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-900">
+                          {TESTO_TIPO[riga.tipo]}
+                        </span>
+                        <span className="font-bold text-slate-950">{riga.locale}</span>
+                        <span>{riga.prodotto}</span>
+                      </div>
+
+                      <p className="mt-1">
+                        {riga.tipo === "oltre_massimo" &&
+                          `ha ${riga.giacenza}, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante}, massimo ${riga.massimo}`}
+                        {riga.tipo === "gia_in_arrivo" &&
+                          `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati`}
+                        {riga.tipo === "piu_del_consigliato" &&
+                          (riga.consigliata > 0
+                            ? `ordina ${riga.ordinata}, il consiglio era ${riga.consigliata} (ne ha ${riga.giacenza})`
+                            : `ordina ${riga.ordinata}, il sistema non ne proponeva (ne ha ${riga.giacenza})`)}
+                      </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <input
