@@ -12,6 +12,8 @@ import { settimanaKeyCorrente } from "@/lib/settimana"
 */
 type SopraSoglia = {
   chiave: string
+  /** Righe d'ordine da correggere: una per locale, prodotto e settimana. */
+  ordineIds: string[]
   locale: string
   prodotto: string
   ordinata: number
@@ -31,6 +33,14 @@ export default function AdminOrdini() {
   const [settimana, setSettimana] = useState(settimanaKeyCorrente())
   const [settimaneDisponibili, setSettimaneDisponibili] = useState<string[]>([])
   const [sopraSoglia, setSopraSoglia] = useState<Map<string, SopraSoglia>>(new Map())
+  /*
+    Righe oltre il massimo che l'amministrazione ha deciso di mandare cosi'
+    come sono. Vale per la sessione: serve a togliere dall'elenco cio' che e'
+    gia' stato guardato, non a registrare una decisione.
+  */
+  const [confermate, setConfermate] = useState<string[]>([])
+  const [correzione, setCorrezione] = useState<Record<string, string>>({})
+  const [salvando, setSalvando] = useState("")
 
   useEffect(() => {
     caricaDati()
@@ -152,6 +162,7 @@ export default function AdminOrdini() {
 
       segnalazioni.set(id, {
         chiave: id,
+        ordineIds: [...(segnalazioni.get(id)?.ordineIds || []), String(ordine.id)],
         locale: String(ordine.locale_nome || "Locale"),
         prodotto: String(ordine.nome_prodotto || "Prodotto"),
         ordinata,
@@ -274,13 +285,13 @@ export default function AdminOrdini() {
     )
 
     return Array.from(sopraSoglia.values())
-      .filter((riga) => idVisibili.has(riga.chiave))
+      .filter((riga) => idVisibili.has(riga.chiave) && !confermate.includes(riga.chiave))
       .sort(
         (a, b) =>
           b.risultante - b.massimo - (a.risultante - a.massimo) ||
           a.locale.localeCompare(b.locale),
       )
-  }, [ordiniFiltrati, sopraSoglia])
+  }, [ordiniFiltrati, sopraSoglia, confermate])
 
   const totaleQuantita = useMemo(() => {
     return ordiniFiltrati.reduce(
@@ -288,6 +299,43 @@ export default function AdminOrdini() {
       0
     )
   }, [ordiniFiltrati])
+
+  /*
+    Correzione della quantità direttamente da qui: e' il punto in cui
+    l'amministrazione guarda l'ordine prima di mandarlo, e tornare indietro
+    fino alla schermata del locale per cambiare un numero non ha senso.
+  */
+  async function salvaQuantita(riga: SopraSoglia) {
+    const nuova = Number(correzione[riga.chiave])
+
+    if (!Number.isFinite(nuova) || nuova < 0) {
+      alert("Inserisci una quantità valida")
+      return
+    }
+
+    setSalvando(riga.chiave)
+
+    const { error } = await supabase
+      .from("ordini")
+      .update({ quantita: nuova })
+      .in("id", riga.ordineIds)
+
+    setSalvando("")
+
+    if (error) {
+      console.log(error)
+      alert("Errore nel salvataggio della quantità")
+      return
+    }
+
+    setCorrezione((attuali) => {
+      const prossimi = { ...attuali }
+      delete prossimi[riga.chiave]
+      return prossimi
+    })
+
+    await caricaDati()
+  }
 
   function copiaTesto() {
     navigator.clipboard.writeText(testo)
@@ -458,8 +506,8 @@ export default function AdminOrdini() {
                   {segnalazioniVisibili.length} righe portano la giacenza oltre il massimo
                 </h3>
                 <p className="mt-0.5 text-xs font-semibold text-amber-800">
-                  Non blocca l&apos;ordine: decidi tu se mandarlo lo stesso o
-                  ridurre la quantità nel testo qui sotto.
+                  Non blocca l&apos;ordine: correggi la quantità qui sotto
+                  oppure conferma e la riga esce dall&apos;elenco.
                 </p>
 
                 <div className="mt-3 space-y-1">
@@ -479,6 +527,42 @@ export default function AdminOrdini() {
                       <span className="font-bold text-amber-800">{riga.risultante}</span>
                       {", massimo "}
                       {riga.massimo}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={correzione[riga.chiave] ?? String(riga.ordinata)}
+                          onChange={(e) =>
+                            setCorrezione((attuali) => ({
+                              ...attuali,
+                              [riga.chiave]: e.target.value,
+                            }))
+                          }
+                          className="h-10 w-24 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-slate-950 outline-none focus:border-blue-600"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => void salvaQuantita(riga)}
+                          disabled={salvando === riga.chiave}
+                          className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-slate-300"
+                        >
+                          {salvando === riga.chiave ? "Salvo..." : "Salva quantità"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setConfermate((attuali) => [...attuali, riga.chiave])
+                          }
+                          disabled={salvando === riga.chiave}
+                          className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          Va bene così
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
