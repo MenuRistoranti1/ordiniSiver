@@ -605,11 +605,11 @@ export default function AdminOrdini() {
 
                       <p className="mt-1">
                         {riga.tipo === "oltre_massimo" &&
-                          `ha ${riga.giacenza}, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante}, massimo ${riga.massimo}`}
+                          `ha ${riga.giacenza} + ordina ${riga.ordinata} = ${riga.risultante}${limite(riga.massimo)}`}
                         {riga.tipo === "oltre_massimo_con_arrivi" &&
-                          `ha ${riga.giacenza} e ${riga.inArrivo} in arrivo, ordina ${riga.ordinata} → arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
+                          `ha ${riga.giacenza} + ${riga.inArrivo} in arrivo + ordina ${riga.ordinata} = ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
                         {riga.tipo === "gia_in_arrivo" &&
-                          `ordina ${riga.ordinata} ma ha già ${riga.inArrivo} pezzi ordinati e non ancora arrivati: arriverebbe a ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
+                          `ha ${riga.giacenza} + ${riga.inArrivo} già ordinati e non arrivati + ordina ${riga.ordinata} = ${riga.risultante + riga.inArrivo}${limite(riga.massimo)}`}
                       </p>
 
                       <div className="mt-2 flex flex-wrap items-center gap-2">

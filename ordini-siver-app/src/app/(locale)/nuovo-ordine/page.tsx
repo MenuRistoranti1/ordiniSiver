@@ -794,9 +794,9 @@ export default function NuovoOrdine() {
 
     const avvisi = daControllare
       .map((riga) =>
-        riga.motivo === "gia_in_arrivo"
-          ? `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta}, ma ${riga.prodotto.in_arrivo} sono già in arrivo${tetto(riga.prodotto)}`
-          : `- ${riga.prodotto.nome_prodotto}: ne ordini ${riga.richiesta} e arriveresti a ${arrivoPrevisto(riga.prodotto, riga.richiesta)}${tetto(riga.prodotto)}`,
+        riga.motivo === "oltre_massimo"
+          ? `- ${riga.prodotto.nome_prodotto}: ${riga.prodotto.giacenza} in casa + ${riga.richiesta} ordinati = ${riga.prodotto.giacenza + riga.richiesta}${tetto(riga.prodotto)}`
+          : `- ${riga.prodotto.nome_prodotto}: ${riga.prodotto.giacenza} in casa + ${riga.prodotto.in_arrivo} in arrivo + ${riga.richiesta} ordinati = ${arrivoPrevisto(riga.prodotto, riga.richiesta)}${tetto(riga.prodotto)}`,
       )
       .join("\n")
 
@@ -1254,12 +1254,16 @@ export default function NuovoOrdine() {
 
                         if (!motivo || righeGuardate.includes(prodotto.id)) return null
 
+                        const tetto =
+                          prodotto.max_stock > 0
+                            ? ` — il massimo è ${prodotto.max_stock}`
+                            : ""
+
+                        // Il conto scritto per esteso: da dove esce il totale.
                         const testo =
-                          motivo === "gia_in_arrivo"
-                            ? `${prodotto.in_arrivo} pezzi sono già stati ordinati e non ancora consegnati: ne stai ordinando altri ${richiesta}.`
-                            : motivo === "oltre_massimo_con_arrivi"
-                              ? `Hai ${prodotto.giacenza} pezzi e ${prodotto.in_arrivo} in arrivo: con altri ${richiesta} arriveresti a ${arrivoPrevisto(prodotto, richiesta)}, oltre il massimo di ${prodotto.max_stock}.`
-                              : `Con ${richiesta} arriveresti a ${prodotto.giacenza + richiesta}, oltre il massimo di ${prodotto.max_stock}.`
+                          motivo === "oltre_massimo"
+                            ? `Ne hai ${prodotto.giacenza} e ne ordini ${richiesta}: ${prodotto.giacenza} + ${richiesta} = ${prodotto.giacenza + richiesta}${tetto}.`
+                            : `Ne hai ${prodotto.giacenza}, ${prodotto.in_arrivo} sono già ordinati e non ancora arrivati, e ne ordini altri ${richiesta}: ${prodotto.giacenza} + ${prodotto.in_arrivo} + ${richiesta} = ${arrivoPrevisto(prodotto, richiesta)}${tetto}.`
 
                         return (
                           <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
